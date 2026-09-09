@@ -1,5 +1,9 @@
 # Spec 06 — MCP Gateway + MCP Server + LLM Orchestration
 
+**Status**: COMPLETE  
+**Owner**: Implementation Agent  
+**Verified**: Zero regression across SPECs 00–05, 100% tests passing in Rust & TypeScript, FIC 8/8 valid.
+
 ## Objetivo
 
 Implementar a fronteira MCP segura (Gateway), a definição de tools/resources (MCP Server), e a orquestração entre LLM, tools, Application, KG, Simulator e Mechanical Gate.

@@ -236,7 +236,15 @@ describe("Architecture & Module Boundary Invariants", () => {
   it("RULE 4: mcp/ does not directly access databases or simulator internals", () => {
     const mcpDir = path.join(rootDir, "mcp");
     const files = getSourceFiles(mcpDir);
-    const forbiddenPatterns = ["neo4j-driver", "pg", "CombatSimulator::simulate"];
+    const forbiddenPatterns = [
+      "neo4j-driver",
+      "pg",
+      "postgres",
+      "CombatSimulator::simulate",
+      "MechanicalVerifier::verify",
+      "combat_simulation",
+      "combat_verification",
+    ];
 
     const violations: string[] = [];
     for (const file of files) {

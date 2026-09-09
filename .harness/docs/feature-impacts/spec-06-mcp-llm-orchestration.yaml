@@ -1,0 +1,204 @@
+feature_id: spec-06-mcp-llm-orchestration
+title: MCP Gateway, MCP Server & LLM Orchestration
+owner: Implementation Agent
+status: verified
+intent: Implement secure MCP Gateway boundary with deny-by-default, explicit capabilities, workspace isolation, rate and budget limiters, tool registry with canonical aliases, MCP Server protocol integration via official MCP SDK, LLM intent orchestration without mechanical authority, and Application boundary enforcement with Human Approval.
+non_goals:
+  - No direct persistence or database driver access from MCP.
+  - No direct execution of simulator or mechanical gate from MCP.
+  - No mechanical safety decisions by LLM.
+  - No auto-application of changesets without human approval.
+  - SPEC 07 (Observability dashboard UI) is strictly NOT STARTED.
+domain_owner: gateway
+
+approval:
+  gate_run_id: gate_run_spec06_mcp_001
+  gate_rule_set_version: "1.0.0"
+  model_revision: "rev-1"
+  approved_by: "human_lead"
+  approved_at: "2026-09-09T17:30:00Z"
+  approval_evidence: "Automated regression tests, security tests (06.SEC.1-12), and gateway tests (06.T.1-12) all passing."
+
+contracts:
+  - name: mcp-auth-v1
+    version: v1
+    change: additive
+  - name: mcp-tools-v1
+    version: v1
+    change: additive
+  - name: mcp-resources-v1
+    version: v1
+    change: additive
+  - name: mcp-changeset-v1
+    version: v1
+    change: additive
+  - name: mcp-intents-v1
+    version: v1
+    change: additive
+
+categories:
+  - gateway
+  - authorization
+  - security
+  - workspace
+  - audit
+  - api
+
+data_sources:
+  - CombatQueryPort
+  - SimulationPort
+  - MechanicalGatePort
+  - ChangeSetRepositoryPort
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added:
+    - "combat:read"
+    - "combat:query"
+    - "combat:simulate"
+    - "combat:verify"
+    - "combat:propose"
+    - "changeset:withdraw"
+    - "changeset:approve"
+    - "changeset:apply"
+    - "admin:workspace"
+    - "admin:policy"
+  capabilities_changed: []
+  tools_added:
+    - "combat_search"
+    - "combat_get_attack"
+    - "list_scenarios"
+    - "impact_analysis"
+    - "combat_simulate"
+    - "combat_verify"
+    - "combat_explain_gate"
+    - "combat_propose_change"
+    - "combat_get_change"
+    - "combat_withdraw_change"
+    - "combat_apply_change"
+  tools_changed: []
+  policy_changed:
+    - "LLM default policy: changeset:apply=DENY, changeset:approve=DENY, admin:*=DENY"
+  registry_changed:
+    - "Canonical tool registry and alias mapping registered in ToolRegistry"
+
+authorization:
+  principals_affected:
+    - "human"
+    - "llm"
+    - "service"
+    - "system"
+  workspace_rules_changed:
+    - "Workspace ID is strictly required and verified against principal authorized set"
+
+security:
+  threats_addressed:
+    - "06.SEC.1 Prompt Injection in Combat Data (Treated as untrusted_text, cannot grant permissions)"
+    - "06.SEC.2 Cross-Workspace Access (Denied by Gateway and ResourceProvider)"
+    - "06.SEC.3 Confused Deputy Protection (Preserves principal, workspace, and correlation_id)"
+    - "06.SEC.4 Privilege Escalation (LLM default denies apply, approve, and admin operations)"
+    - "06.SEC.5 Path Traversal (Resource URI traversal rejected)"
+    - "06.SEC.6 Oversized Request Payload (Enforces max request size limiter)"
+    - "06.SEC.7 Excessive Tool Recursion (Recursion depth capped at 5)"
+    - "06.SEC.8 Budget Abuse (Administrative bounds on simulation & verification parameters)"
+    - "06.SEC.9 Forged GateResult / SimulationResult (Accepted only from trusted application execution paths)"
+    - "06.SEC.10 Forged Human Approval (Strictly requires human principal_type for approval)"
+    - "06.SEC.11 Stale Revision Race (Revision comparison rejects stale changes)"
+    - "06.SEC.12 Secret Leakage Prevention (Redacts tokens/credentials from audit logs)"
+  invariants_affected:
+    - GW-I01
+    - GW-I02
+    - GW-I03
+    - GW-I04
+    - GW-I05
+    - GW-I06
+    - GW-I07
+    - GW-I08
+    - GW-I09
+    - GW-I10
+    - GW-I11
+    - GW-I12
+    - GW-I13
+    - GW-I14
+    - GW-I15
+    - GW-I16
+    - GW-I17
+
+audit:
+  events_added:
+    - "tool_call"
+    - "authorization_decision"
+  events_changed: []
+
+mcp:
+  tools_added:
+    - "combat_search"
+    - "combat_get_attack"
+    - "list_scenarios"
+    - "impact_analysis"
+    - "combat_simulate"
+    - "combat_verify"
+    - "combat_explain_gate"
+    - "combat_propose_change"
+    - "combat_get_change"
+    - "combat_withdraw_change"
+    - "combat_apply_change"
+  resources_added:
+    - "combat://workspace/{workspace_id}/attacks/{attack_id}"
+    - "combat://workspace/{workspace_id}/archetypes/{archetype_id}"
+    - "combat://workspace/{workspace_id}/graph/{query_id}"
+    - "combat://workspace/{workspace_id}/verification/{gate_run_id}"
+    - "combat://workspace/{workspace_id}/provenance/{asset_id}"
+
+api:
+  endpoints_added: []
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - backend/contracts/tests/mcp.test.ts
+    - backend/application/tests/changeset-lifecycle.test.ts
+    - mcp/tests/integration/gateway.test.ts
+    - mcp/tests/integration/llm-orchestration.test.ts
+    - mcp/tests/integration/security.test.ts
+    - mcp/tests/integration/invariants.test.ts
+  integration:
+    - mcp/tests/integration/gateway.test.ts
+    - mcp/tests/integration/security.test.ts
+  property: []
+  fixtures: []
+  e2e: []
+  gateway:
+    - mcp/tests/integration/gateway.test.ts
+
+observability:
+  metrics:
+    - gateway_requests_total
+    - gateway_denials_total
+    - gateway_execution_duration_ms
+  traces:
+    - gateway.execute
+    - mcp.tool_call
+  logs:
+    - gateway.audit
+
+rollback: Revert mcp package, backend/contracts/src/mcp, and backend/application changeset use cases.
+risks: Prompt injection attempts in asset metadata; mitigated by untrusted_text markers and fail-closed authorization.

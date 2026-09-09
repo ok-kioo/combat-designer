@@ -8,3 +8,4 @@ export * from "./ingestion/snapshot.js";
 export * from "./ingestion/compatibility.js";
 export * from "./simulation/index.js";
 export * from "./verification/index.js";
+export * from "./mcp/index.js";
