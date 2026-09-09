@@ -1,87 +1,119 @@
 # Spec 05 — Mechanical Gate
 
-## Interface
+**Status**: IMPLEMENTED & VERIFIED
+**Implementation Module**: `engine/combat-verification`
+**Contracts**: `backend/contracts/src/verification/`
+**Application Port**: `backend/application/src/ports/mechanical-gate-port.ts`
+**Application Use Case**: `backend/application/src/use-cases/verify-combat.ts`
+**FIC**: `.harness/docs/feature-impacts/spec-05-mechanical-gate.yaml`
 
-```text
-run_gate(changeset, baseline_revision, scenarios, gate_profile)
- -> GateResult
+---
+
+## 1. Visão Geral & Responsabilidade Arquitetural
+
+O Mechanical Gate é a camada formal de **verificação mecânica, prova e decisão de segurança** do Combat Designer.
+
+Sua responsabilidade é avaliar fatos produzidos pelo **Deterministic Combat Simulator** (`engine/combat-simulation`) e evidências estruturais provenientes do modelo canônico (`engine/combat-domain`), determinando se propriedades mecânicas foram satisfeitas, violadas ou não puderam ser provadas dentro dos limites de verificação.
+
+O Mechanical Gate:
+- **Responde**: `"IS THE OBSERVED BEHAVIOR MECHANICALLY SAFE / VALID?"`
+- **Não simula física ou colisões** (responsabilidade do Simulator).
+- **Não faz chamadas a LLMs** nem aceita texto de LLM como prova.
+- **Não concede autorização de API** (responsabilidade do Gateway).
+- **Não aprova mutações ou ChangeSets** (responsabilidade estrita de Human Approval).
+- **Não persiste automaticamente dados**.
+
+---
+
+## 2. Interface Canônica
+
+```rust
+MechanicalVerifier::verify(
+    request: &VerificationRequest,
+    simulation: &SimulationOutput
+) -> GateResult
 ```
 
-## Profiles
+### TypeScript Boundary Port (`MechanicalGatePort`)
 
-### fast
+```typescript
+export interface MechanicalGatePort {
+  verify(
+    request: VerificationRequest,
+    simulation: SimulationOutput
+  ): Promise<GateResult>;
+}
+```
 
-Schema, determinism, ciclos locais, recursos, DPS básico e provenance.
+---
 
-### strict
+## 3. Perfis de Verificação
 
-Todos os cenários, SCC, bounded exhaustive search, property tests e comparação com baseline.
+### `strict`
+- Modo padrão e obrigatório para autorização de release.
+- Todas as regras ativas (`G01`–`G11` + `Counterplay`).
+- **Fail-Closed**: Qualquer evidência inconclusiva, falta de prova, ausência de provenance ou esgotamento de orçamento bloqueia a aprovação (`BLOCKED` / `BUDGET_EXCEEDED`).
 
-### research
+### `fast`
+- Execução rápida para loops de feedback local em IDE / CLI.
+- Ciclos locais, determinismo, integridade de simulação, DPS e recursos.
+- Thresholds mais permissivos, ciclo com heurística abreviada.
 
-Heurístico; nunca autoriza release.
+### `research`
+- Perfil puramente experimental e exploratório.
+- **`can_authorize_release() == false`**: Nunca autoriza release para produção.
 
-## Regras
+---
 
-### NO_INFINITE_LOOP
+## 4. Regras Mecânicas (G01–G11 & Counterplay)
 
-Falhar se houver ciclo alcançável sem escape, custo líquido, contador finito ou terminal.
+1. **`G01_SIMULATION_INTEGRITY`**: Valida StateHash SHA-256 (64 hex chars), integridade estrutural do log e monotonicidade de sequência.
+2. **`G02_INFINITE_LOOP`**: Detecta ciclos nos estados de combate. Falha se houver ciclo sem escape, sem custo de recursos ou progressão forçada (`INFINITE_STUN_LOOP`).
+3. **`G03_STUN_LOCK`**: Verifica se o defensor obtém a janela mínima de reação entre hits consecutivos (`STUN_LOCK`).
+4. **`G04_RESOURCE_SAFETY`**: Verifica se cadeias de ataques consom recursos e não sustentam vantagem indefinidamente (`RESOURCE_SAFETY`).
+5. **`G05_MAX_SUSTAINED_DPS`**: Cálculo sliding-window de dano por segundo normalizado a 60fps usando exclusivamente aritmética de inteiros (`MAX_SUSTAINED_DPS`).
+6. **`G06_MAX_BURST`**: Verificação do dano máximo contíguo de sequências de ataque (`MAX_BURST`).
+7. **`G07_MAX_JUGGLE`**: Verificação da duração contínua em frames em estado airborne/juggle (`MAX_JUGGLE`).
+8. **`G08_CANCEL_VALIDITY`**: Verifica se os cancels observados ocorreram estritamente dentro de janelas válidas (`CANCEL_VALIDITY`).
+9. **`G09_PROVENANCE_REQUIRED`**: Em strict, exige proveniência verificável para todos os parâmetros críticos (`PROVENANCE_REQUIRED`).
+10. **`G10_ZERO_RISK_ATTACK`**: Detecta ataques com dano elevado, total invulnerabilidade e recuperação impunível. Falha fechado se inconclusivo (`ZERO_RISK_ATTACK`).
+11. **`G11_GUARD_INTEGRITY`**: Para ataques com quebra de guarda, exige que o defensor possua opções de escape antes da quebra (`GUARD_INTEGRITY`).
+12. **`NO_COUNTERPLAY`**: Verifica existência de janela acionável de contra-ataque durante a recuperação do atacante (`NO_COUNTERPLAY`).
 
-### NO_STUN_LOCK
+---
 
-Falhar quando a reação mínima do arquétipo nunca ocorre.
-
-### MAX_SUSTAINED_DPS
-
-DPS acima do limite => FAIL.
-
-### MAX_BURST
-
-Burst acima do limite => FAIL.
-
-### MAX_JUGGLE
-
-Juggle acima do limite => FAIL.
-
-### RESOURCE_SAFETY
-
-Sustain infinito proibido => FAIL.
-
-### CANCEL_VALIDITY
-
-Cancel fora da janela/condição => FAIL.
-
-### PROVENANCE_REQUIRED
-
-Dado crítico sem origem => BLOCKED/FAIL em STRICT.
-
-### GUARD_INTEGRITY
-
-Todo Attack com `guard_break_value > 0` deve ter cenário associado comprovando que o defensor retém pelo menos uma opção de saída (bloqueio, invuln ou escape) antes do guard break ser atingido em uso normal do arquétipo; ausência de cenário associado => FAIL em STRICT.
-
-## Estados
+## 5. Estados do GateVerdict & Agregação Fail-Closed
 
 ```text
 PASS
 FAIL
 BLOCKED
-ERROR
 STALE
 BUDGET_EXCEEDED
+ERROR
 ```
 
-BLOCKED não é PASS. STALE não é PASS: é um PASS anterior cuja validade expirou por avanço de `model_revision` ou `rule_set_version` (ver Aceite). `BUDGET_EXCEEDED` não é PASS nem FAIL nem ERROR: significa que o orçamento de execução (specs/04, specs/09) esgotou antes de uma decisão — "não decidido", distinto de "viola regra" (FAIL) e de "falha inesperada" (ERROR).
+Regras de agregação:
+- Qualquer `ERROR` no simulador ou requisição $\rightarrow$ `GateVerdict::Error`.
+- Qualquer esgotamento de orçamento $\rightarrow$ `GateVerdict::BudgetExceeded`.
+- Qualquer regra com `FAIL` $\rightarrow$ `GateVerdict::Fail`.
+- Qualquer regra com `BLOCKED` ou `INCONCLUSIVE` em `strict` $\rightarrow$ `GateVerdict::Blocked`.
+- Todas as regras com `PASS` $\rightarrow$ `GateVerdict::Pass`.
 
-### EXECUTION_BUDGET
+---
 
-Regra que classifica o resultado como `BUDGET_EXCEEDED` quando `wall_clock_timeout_ms` ou `max_iterations` (specs/04) é atingido antes de as demais regras concluírem. `BUDGET_EXCEEDED` nunca autoriza publicação em STRICT, no mesmo espírito de BLOCKED.
+## 6. Proteção contra Resultados Obsoletos (Stale Protection)
 
-## Evidência
+Um `GateResult` é válido única e exclusivamente para a tupla exata:
+$$(workspace\_id, project\_revision, canonical\_snapshot\_hash, simulation\_input\_hash, verification\_profile, rule\_set\_version, verifier\_version)$$
 
-Cada check retorna rule_id, scenario, simulation_hash, threshold, observed, expected e evidence.
+Qualquer avanço ou divergência invalida o resultado, retornando `STALE` com `ViolationCode::StaleRevision`.
 
-## Aceite
+---
 
-Não existe publicação em STRICT sem GateResult PASS.
+## 7. Determinismo e Hashing Auditável
 
-Um GateResult PASS é válido somente para o par exato `(model_revision, rule_set_version)` em que foi gerado. Se o `model_revision` avançar ou `rule_set_version` mudar antes do release, o PASS anterior passa a `STALE` e não pode ser usado para autorizar publicação; o gate deve ser reexecutado.
+- **Aritmética discreta**: 100% inteiros (`u32`, `u64`, `i32`). Zero floats, zero relógio de parede.
+- **Ordenação determinística de evidências**: Ordenadas por `(frame_start, frame_end, actor_ids, attack_ids, evidence_id)`.
+- **`gate_result_hash`**: SHA-256 canônico gerado sobre `CanonicalGateResultForm` (exclui `gate_run_id` e o próprio hash).
+- 100 execuções idênticas produzem exatamente o mesmo `GateResultHash` e mesmo veredicto.

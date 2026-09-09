@@ -172,9 +172,12 @@ describe("Architecture & Module Boundary Invariants", () => {
     expect(fs.existsSync(path.join(rootDir, "backend/infrastructure/ingestion/fixtures/unity-bundle"))).toBe(true);
     // SimulationPort in backend/application
     expect(fs.existsSync(path.join(rootDir, "backend/application/src/ports/simulation-port.ts"))).toBe(true);
+    // MechanicalGatePort in backend/application
+    expect(fs.existsSync(path.join(rootDir, "backend/application/src/ports/mechanical-gate-port.ts"))).toBe(true);
     // Rust engine in engine/
     expect(fs.existsSync(path.join(rootDir, "engine/combat-domain/src"))).toBe(true);
     expect(fs.existsSync(path.join(rootDir, "engine/combat-simulation/src"))).toBe(true);
+    expect(fs.existsSync(path.join(rootDir, "engine/combat-verification/src"))).toBe(true);
     // MCP in mcp/
     expect(fs.existsSync(path.join(rootDir, "mcp/gateway"))).toBe(true);
     expect(fs.existsSync(path.join(rootDir, "mcp/server"))).toBe(true);
@@ -191,6 +194,7 @@ describe("Architecture & Module Boundary Invariants", () => {
     const cargoTomls = [
       path.join(rootDir, "engine/combat-domain/Cargo.toml"),
       path.join(rootDir, "engine/combat-simulation/Cargo.toml"),
+      path.join(rootDir, "engine/combat-verification/Cargo.toml"),
     ];
 
     const forbidden = ["backend", "frontend", "mcp", "infrastructure", "tokio", "neo4j", "postgres"];

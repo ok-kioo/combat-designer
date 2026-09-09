@@ -66,3 +66,15 @@ Apply
 ### 2.6 MCP Gateway & MCP Server
 * **MCP Gateway** (`mcp/gateway`): Fronteira de segurança. Autenticação, resolução de principal, autorização, isolamento de workspace, rate limits e auditoria. Não conhece regras de combate.
 * **MCP Server** (`mcp/server`): Tradução de protocolos e exposição de ferramentas para LLMs. Não possui autoridade mecânica e nunca escreve em bancos diretamente.
+
+### 2.7 Mechanical Gate Engine (`engine/combat-verification`)
+* **Responsabilidade**: Responde **"IS THE OBSERVED BEHAVIOR MECHANICALLY SAFE / VALID?"**. Avalia fatos produzidos pelo Simulator e restrições canônicas do Domain.
+* **Isolamento**:
+  * 100% determinístico e baseado em inteiros discretos (`u32`, `u64`, `i32`).
+  * Sem uso de floats (`f32`/`f64`) na lógica mecânica.
+  * Sem acesso a relógio de parede (`Instant`, `SystemTime`).
+  * Bounded por `VerificationBudgetTracker` contra explosão combinatória.
+  * **Fail-Closed em `strict`**: Qualquer falta de prova, evidência inconclusiva, falta de provenance ou estouro de orçamento bloqueia a aprovação (`BLOCKED` / `BUDGET_EXCEEDED`).
+  * Proteção Stale: Inválido se houver avanço de `model_revision`, `rule_set_version` ou hashes de snapshot.
+  * Hash canônico SHA-256 auditável (`gate_result_hash`).
+  * **Não aprova mudanças nem mutações**: O Gate apenas atesta a elegibilidade mecânica; a autorização de publicação é reservada exclusivamente para o **Human Approval**.

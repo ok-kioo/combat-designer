@@ -1,0 +1,75 @@
+//! Verification verdicts, check statuses, and GateResult data models.
+
+use serde::{Deserialize, Serialize};
+
+use crate::budget::VerificationBudgetResult;
+use crate::evidence::Evidence;
+use crate::violations::ViolationCode;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CheckStatus {
+    Pass,
+    Fail,
+    Blocked,
+    Inconclusive,
+    BudgetExceeded,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GateVerdict {
+    Pass,
+    Fail,
+    Blocked,
+    Stale,
+    BudgetExceeded,
+    Error,
+}
+
+impl GateVerdict {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pass => "PASS",
+            Self::Fail => "FAIL",
+            Self::Blocked => "BLOCKED",
+            Self::Stale => "STALE",
+            Self::BudgetExceeded => "BUDGET_EXCEEDED",
+            Self::Error => "ERROR",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckResult {
+    pub rule_id: String,
+    pub scenario_id: String,
+    pub status: CheckStatus,
+    pub threshold: u64,
+    pub observed: u64,
+    pub expected: String,
+    pub violation_code: Option<ViolationCode>,
+    pub evidence: Option<Evidence>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GateResult {
+    pub gate_run_id: String,
+    pub workspace_id: String,
+    pub project_revision: String,
+    pub canonical_snapshot_hash: String,
+    pub simulation_input_hash: String,
+    pub simulation_state_hash: String,
+    pub event_log_hash: String,
+    pub verification_profile: String,
+    pub rule_set_version: String,
+    pub verifier_version: String,
+    pub verdict: GateVerdict,
+    pub checks: Vec<CheckResult>,
+    pub violations: Vec<ViolationCode>,
+    pub evidence: Vec<Evidence>,
+    pub budgets: VerificationBudgetResult,
+    pub gate_result_hash: String,
+}

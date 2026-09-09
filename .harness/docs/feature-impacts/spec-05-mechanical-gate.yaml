@@ -1,0 +1,146 @@
+feature_id: spec-05-mechanical-gate
+title: Mechanical Gate Verification Engine & Application Port
+owner: Implementation Agent
+status: verified
+intent: Implement pure, deterministic mechanical verification and safety gate engine in Rust (engine/combat-verification) with bounded execution budgets, fail-closed strict profile, G01-G11 safety rules, canonical GateResult SHA-256 hashing, and TypeScript contracts/application port.
+non_goals:
+  - Mechanical Gate strictly answers "IS IT SAFE / VALID?"; never simulates physics or collision math (Deterministic Simulator responsibility).
+  - Mechanical Gate does not grant authorization or policy decisions (MCP Gateway responsibility).
+  - Mechanical Gate does not make LLM calls or interpret LLM text as proof.
+  - Mechanical Gate does not approve changesets or apply mutations (Human Approval responsibility).
+domain_owner: verification
+
+approval:
+  gate_run_id: null
+  gate_rule_set_version: null
+  model_revision: null
+  approved_by: null
+  approved_at: null
+  approval_evidence: null
+
+contracts:
+  - name: mechanical-gate-port-v1
+    version: v1
+    change: additive
+  - name: verification-request-v1
+    version: v1
+    change: additive
+  - name: gate-result-v1
+    version: v1
+    change: additive
+
+categories:
+  - domain
+  - simulation
+  - verification
+  - security
+  - workspace
+  - audit
+  - api
+
+data_sources:
+  - SimulationOutput
+  - VerificationRequest
+  - Canonical Combat Snapshot
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added:
+    - G01_SIMULATION_INTEGRITY
+    - G02_INFINITE_LOOP
+    - G03_STUN_LOCK
+    - G04_RESOURCE_SAFETY
+    - G05_MAX_SUSTAINED_DPS
+    - G06_MAX_BURST
+    - G07_MAX_JUGGLE
+    - G08_CANCEL_VALIDITY
+    - G09_PROVENANCE_REQUIRED
+    - G10_ZERO_RISK_ATTACK
+    - G11_GUARD_INTEGRITY
+    - NO_COUNTERPLAY
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected: []
+  workspace_rules_changed: []
+
+security:
+  threats_addressed:
+    - "05.SEC.1 Workspace Isolation (Cross-workspace verification request strictly rejected; workspace_id required in all requests and results)"
+    - "05.SEC.2 Stale GateResult (FreshnessContext enforces exact matching of workspace, revision, snapshot hash, input hash, profile, rule set version, and verifier version)"
+    - "05.SEC.3 Inconsistent/Forged Content Hash (Deterministic SHA-256 canonical hashing over CanonicalGateResultForm without operational IDs)"
+    - "05.SEC.4 Modified SimulationResult (Structural integrity and monotonic event sequence validation in G01)"
+    - "05.SEC.5 Budget Bypass (Enforced VerificationBudgetTracker across events, states, cycles, and steps returning BUDGET_EXCEEDED)"
+    - "05.SEC.6 Malformed Verification Request (Fail-closed structural boundary validation in Application and Verifier)"
+    - "05.SEC.7 Non-Deterministic Evidence Ordering (Deterministic sorting key on frame, actor_id, attack_id, and evidence_id)"
+    - "05.SEC.8 Invalid Profile Escalation (Research profile cannot authorize release; strict profile fails closed on inconclusive proof)"
+    - "05.SEC.9 Replay Mismatch (State hash divergence detected and flagged as InvalidSimulation)"
+    - "05.SEC.10 Revision Race (Revision changes invalidate prior gate results with STALE verdict)"
+    - "05.SEC.11 Integer Overflow (All math uses checked/saturating integer arithmetic, zero floats)"
+    - "05.SEC.12 Missing Provenance in Strict (Missing required provenance fields blocks PASS in strict mode)"
+  invariants_affected:
+    - GW-I01
+    - GW-I02
+    - GW-I03
+
+audit:
+  events_added:
+    - verification.scenario.evaluated
+    - verification.gate.result_emitted
+    - verification.budget.exceeded
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added: []
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - engine/combat-verification/tests/verifier_tests.rs
+    - engine/combat-verification/tests/security_tests.rs
+    - engine/combat-verification/tests/architecture_isolation_test.rs
+    - backend/contracts/tests/verification.test.ts
+    - backend/application/tests/verification.test.ts
+  integration: []
+  property:
+    - engine/combat-verification/tests/property_tests.rs
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - verification_duration_ms
+    - verification_steps_total
+    - verification_budget_exceeded_total
+  traces: []
+  logs: []
+
+rollback: Revert engine/combat-verification, backend/contracts/src/verification, backend/application/src/ports/mechanical-gate-port.ts, and backend/application/src/use-cases/verify-combat.ts.
+risks: Complex combative cycle combinations could exhaust cycle search budget; mitigated by bounded VerificationBudgetTracker and strict fail-closed BUDGET_EXCEEDED handling.
