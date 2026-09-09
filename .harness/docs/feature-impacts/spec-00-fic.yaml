@@ -1,0 +1,97 @@
+feature_id: spec-00-fic
+title: Feature Impact Contract Scaffolding & Enforcement
+owner: Implementation Agent
+status: verified
+intent: Establish formal contract template, JSON schema, validator CLI, and CI checks ensuring all changes declare cross-cutting architectural impact.
+non_goals:
+  - Does not implement mechanical gate checks or runtime game logic.
+domain_owner: shared-contracts
+
+approval:
+  gate_run_id: null
+  gate_rule_set_version: null
+  model_revision: null
+  approved_by: null
+  approved_at: null
+  approval_evidence: null
+
+contracts:
+  - name: feature-impact-contract
+    version: v1
+    change: additive
+
+categories:
+  - verification
+  - infrastructure
+  - security
+  - audit
+
+data_sources: []
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected: []
+  workspace_rules_changed: []
+
+security:
+  threats_addressed:
+    - TM-06
+    - TM-14
+  invariants_affected: []
+
+audit:
+  events_added:
+    - fic.validation.passed
+    - fic.validation.failed
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added: []
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - backend/contracts/tests/fic.test.ts
+  integration: []
+  property: []
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics: []
+  traces: []
+  logs: []
+
+rollback: Remove backend/contracts and .harness/docs/feature-impacts files.
+risks: Minimal; foundational schema tooling only.

@@ -1,0 +1,133 @@
+feature_id: spec-03-knowledge-graph
+title: Knowledge Graph Projection & Query Catalog
+owner: Implementation Agent
+status: verified
+intent: Project Canonical Combat Snapshots into Neo4j graph representation (attacks, hitboxes, cancels, resources, provenance, metadata) with strict workspace isolation, composite unique constraints, parameterized Cypher queries (Q01 to Q06), and deterministic stale detection.
+non_goals:
+  - Neo4j is never the mechanical authority; does not execute mechanical gate or physics simulation.
+  - Does not implement Spec 04 deterministic simulator.
+  - Does not expose direct HTTP/Neo4j access to LLMs (must route through Application / Gateway).
+domain_owner: graph
+
+approval:
+  gate_run_id: null
+  gate_rule_set_version: null
+  model_revision: null
+  approved_by: null
+  approved_at: null
+  approval_evidence: null
+
+contracts:
+  - name: graph-schema
+    version: v1
+    change: additive
+  - name: graph-projection-status
+    version: v1
+    change: additive
+  - name: query-catalog-q01-q06
+    version: v1
+    change: additive
+
+categories:
+  - graph
+  - domain
+  - security
+  - workspace
+  - infrastructure
+  - audit
+
+data_sources:
+  - Canonical Combat Snapshot
+
+kg:
+  nodes_added:
+    - Attack
+    - Hitbox
+    - CancelRule
+    - ResourceCost
+    - Provenance
+    - ProjectionMetadata
+  nodes_changed: []
+  relationships_added:
+    - HAS_HITBOX
+    - HAS_CANCEL
+    - CANCELS_TO
+    - REQUIRES_RESOURCE
+    - HAS_PROVENANCE
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected: []
+  workspace_rules_changed: []
+
+security:
+  threats_addressed:
+    - 03.SEC.1 Cross-Workspace Graph Pollution (Strict composite uniqueness and mandatory workspace_id on all nodes, edges, queries)
+    - 03.SEC.2 Cypher Injection (100% Parameterized Cypher queries)
+    - 03.SEC.3 Graph Query DoS (Clamped max_depth <= 10 and max_results <= 100 on recursive traversals)
+    - 03.SEC.4 Stale / Drifted Projection Access (Deterministic hash comparison and graph_schema_version validation)
+    - 03.SEC.5 Partial / Corrupted Projection Treatment (Atomic projection status marked ERROR upon failure)
+  invariants_affected:
+    - GW-I02
+    - GW-I03
+    - GW-I14
+    - GW-I15
+
+audit:
+  events_added:
+    - graph.snapshot.projected
+    - graph.status.stale_detected
+    - graph.query.executed
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added: []
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations:
+    - schema/constraints-v1.cypher
+
+tests:
+  unit:
+    - backend/infrastructure/neo4j/tests/projection.test.ts
+    - backend/infrastructure/neo4j/tests/workspace-isolation.test.ts
+  integration:
+    - backend/infrastructure/neo4j/tests/queries.test.ts
+  property: []
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - graph_projection_duration_ms
+    - graph_queries_total
+    - graph_stale_detected_total
+  traces: []
+  logs: []
+
+rollback: Drop Neo4j constraints and purge nodes by workspace_id, revert backend/infrastructure/neo4j.
+risks: Graph queries on unbounded traversal depth could consume excessive server resources; strictly bounded by clamped limits and workspace assertion.

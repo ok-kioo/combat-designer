@@ -1,0 +1,127 @@
+feature_id: spec-02-engine-ingestion
+title: Engine Ingestion Pipeline (Unity Export Bundle MVP)
+owner: Implementation Agent
+status: verified
+intent: Implement engine-agnostic Export Bundle validation, Unity ScriptableObject YAML parsing, RawExtraction, domain normalization, provenance tracking, quarantine, conflict detection, and deterministic snapshot generation.
+non_goals:
+  - Does not connect to live Unity editor sockets or remote user filesystems.
+  - Does not implement Unreal or Godot binary parsers in this phase.
+  - Does not project into Neo4j graph (Spec 03).
+domain_owner: ingestion
+
+approval:
+  gate_run_id: null
+  gate_rule_set_version: null
+  model_revision: null
+  approved_by: null
+  approved_at: null
+  approval_evidence: null
+
+contracts:
+  - name: export-bundle-manifest
+    version: v1
+    change: additive
+  - name: raw-extraction
+    version: v1
+    change: additive
+  - name: canonical-snapshot-envelope
+    version: v1
+    change: additive
+
+categories:
+  - ingestion
+  - domain
+  - security
+  - workspace
+  - infrastructure
+  - audit
+
+data_sources:
+  - Unity ScriptableObject YAML text serialization
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected: []
+  workspace_rules_changed: []
+
+security:
+  threats_addressed:
+    - 02.SEC.1 Path Traversal
+    - 02.SEC.2 Oversized Bundle / DoS
+    - 02.SEC.3 Excessive YAML Nesting Depth
+    - 02.SEC.4 Prompt Injection via Asset Label (untrusted_text)
+    - 02.SEC.5 Duplicate Asset Identity
+    - 02.SEC.6 Workspace Mismatch
+    - 02.SEC.7 Manifest Tampering (SHA-256 Checksum)
+    - 02.SEC.8 Unsupported Format / Engine
+  invariants_affected:
+    - GW-I02
+    - GW-I03
+    - GW-I15
+
+audit:
+  events_added:
+    - ingestion.bundle.validated
+    - ingestion.asset.quarantined
+    - ingestion.conflict.detected
+    - ingestion.snapshot.created
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added: []
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - backend/infrastructure/ingestion/tests/manifest.test.ts
+    - backend/infrastructure/ingestion/tests/parser.test.ts
+    - backend/infrastructure/ingestion/tests/security.test.ts
+  integration:
+    - backend/infrastructure/ingestion/tests/pipeline.test.ts
+  property: []
+  fixtures:
+    - backend/infrastructure/ingestion/fixtures/unity-bundle/assets/stinger.asset
+    - backend/infrastructure/ingestion/fixtures/unity-bundle/assets/heavy_cleave.asset
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - ingestion_duration
+    - ingestion_assets_total
+    - ingestion_assets_quarantined
+  traces: []
+  logs: []
+
+rollback: Clean revert of backend/infrastructure/ingestion directory.
+risks: Ingestion handles untrusted third-party files. Security limits (depth, size, path traversal, checksums) must remain fail-closed.

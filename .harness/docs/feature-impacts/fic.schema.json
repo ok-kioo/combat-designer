@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://combat-designer.internal/schemas/feature-impact-contract.json",
+  "title": "FeatureImpactContract",
+  "description": "Formal contract declaring the systemic impact of any change or feature in the Combat Designer.",
+  "type": "object",
+  "required": [
+    "feature_id",
+    "title",
+    "owner",
+    "status",
+    "intent",
+    "domain_owner"
+  ],
+  "properties": {
+    "feature_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for the feature/change"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short human-readable title"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Primary author or responsible agent"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "designed", "implementing", "verified", "released"],
+      "description": "Lifecycle status of the feature"
+    },
+    "intent": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Why this feature exists and what problem it solves"
+    },
+    "non_goals": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ],
+      "description": "Explicit non-goals"
+    },
+    "domain_owner": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Domain or subsystem owner (e.g. domain, gateway, simulation, ingestion)"
+    },
+    "approval": {
+      "type": "object",
+      "properties": {
+        "gate_run_id": { "type": ["string", "null"] },
+        "gate_rule_set_version": { "type": ["string", "null"] },
+        "model_revision": { "type": ["string", "null"] },
+        "approved_by": { "type": ["string", "null"] },
+        "approved_at": { "type": ["string", "null"] },
+        "approval_evidence": { "type": ["string", "null"] }
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "version", "change"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "version": { "type": "string", "minLength": 1 },
+          "change": { "type": "string", "enum": ["none", "additive", "breaking"] }
+        }
+      }
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "domain",
+          "simulation",
+          "verification",
+          "ingestion",
+          "graph",
+          "gateway",
+          "authorization",
+          "capability",
+          "security",
+          "audit",
+          "tool-policy",
+          "workspace",
+          "observability",
+          "infrastructure",
+          "api",
+          "ui"
+        ]
+      }
+    },
+    "data_sources": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "kg": {
+      "type": "object",
+      "properties": {
+        "nodes_added": { "type": "array", "items": { "type": "string" } },
+        "nodes_changed": { "type": "array", "items": { "type": "string" } },
+        "relationships_added": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "simulation": {
+      "type": "object",
+      "properties": {
+        "states_added": { "type": "array", "items": { "type": "string" } },
+        "transitions_added": { "type": "array", "items": { "type": "string" } },
+        "timing_rules_changed": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "added": { "type": "array", "items": { "type": "string" } },
+        "changed": { "type": "array", "items": { "type": "string" } },
+        "affected": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "properties": {
+        "capabilities_added": { "type": "array", "items": { "type": "string" } },
+        "capabilities_changed": { "type": "array", "items": { "type": "string" } },
+        "tools_added": { "type": "array", "items": { "type": "string" } },
+        "tools_changed": { "type": "array", "items": { "type": "string" } },
+        "policy_changed": { "type": "array", "items": { "type": "string" } },
+        "registry_changed": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "properties": {
+        "principals_affected": { "type": "array", "items": { "type": "string" } },
+        "workspace_rules_changed": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "threats_addressed": { "type": "array", "items": { "type": "string" } },
+        "invariants_affected": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "events_added": { "type": "array", "items": { "type": "string" } },
+        "events_changed": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "properties": {
+        "tools_added": { "type": "array", "items": { "type": "string" } },
+        "resources_added": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "api": {
+      "type": "object",
+      "properties": {
+        "endpoints_added": { "type": "array", "items": { "type": "string" } },
+        "endpoints_changed": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "postgres_migrations": { "type": "array", "items": { "type": "string" } },
+        "neo4j_migrations": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "tests": {
+      "type": "object",
+      "properties": {
+        "unit": { "type": "array", "items": { "type": "string" } },
+        "integration": { "type": "array", "items": { "type": "string" } },
+        "property": { "type": "array", "items": { "type": "string" } },
+        "fixtures": { "type": "array", "items": { "type": "string" } },
+        "e2e": { "type": "array", "items": { "type": "string" } },
+        "gateway": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "properties": {
+        "metrics": { "type": "array", "items": { "type": "string" } },
+        "traces": { "type": "array", "items": { "type": "string" } },
+        "logs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "rollback": { "type": "string" },
+    "risks": { "type": "string" }
+  }
+}

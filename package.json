@@ -1,0 +1,19 @@
+{
+  "name": "combat-designer",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "backend/*",
+    "backend/infrastructure/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "npm run --workspaces --if-present build",
+    "test": "npm run --workspaces --if-present test && vitest run shared/architecture",
+    "test:architecture": "vitest run shared/architecture",
+    "typecheck": "npm run --workspaces --if-present typecheck",
+    "validate-fic": "node --loader ts-node/esm .agents/validators/fic/validate-cli.ts"
+  }
+}

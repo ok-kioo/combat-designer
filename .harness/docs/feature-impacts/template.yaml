@@ -1,0 +1,91 @@
+feature_id: example-feature-001
+title: Example Feature Title
+owner: Implementation Agent
+status: proposed
+intent: Clearly describe the problem this feature solves and the intended outcome.
+non_goals:
+  - Things this feature explicitly does not cover.
+domain_owner: domain
+
+approval:
+  gate_run_id: null
+  gate_rule_set_version: null
+  model_revision: null
+  approved_by: null
+  approved_at: null
+  approval_evidence: null
+
+contracts:
+  - name: canonical-combat-model
+    version: v1
+    change: additive
+
+categories:
+  - domain
+  - simulation
+  - verification
+
+data_sources: []
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected: []
+  workspace_rules_changed: []
+
+security:
+  threats_addressed: []
+  invariants_affected: []
+
+audit:
+  events_added: []
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added: []
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit: []
+  integration: []
+  property: []
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics: []
+  traces: []
+  logs: []
+
+rollback: Clean revert of git commit; no state migration required.
+risks: Minimal risk.

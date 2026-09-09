@@ -1,0 +1,37 @@
+{
+  "project": "combat-designer-computational",
+  "generated": "2026-09-09",
+  "files": [
+    "README.md",
+    ".harness/rules/architecture/ask-refactoring.md",
+    ".harness/rules/domain/domain-isolation.md",
+    ".harness/rules/mcp/mcp-gateway-invariants.md",
+    ".harness/rules/architecture/suggest-improvements.md",
+    ".harness/rules/security/2026-09-09-web-platform-and-security.md",
+    ".harness/skills/architecture/architecture.md",
+    ".harness/skills/research/lessons.md",
+    ".harness/skills/simulation/mechanical-gate-verification.md",
+    ".harness/skills/architecture/sequential-task-breakdown.md",
+    ".harness/specs/00-fic/spec.md",
+    ".harness/specs/01-canonical-domain/spec.md",
+    ".harness/specs/02-engine-ingestion/spec.md",
+    ".harness/specs/03-knowledge-graph/spec.md",
+    ".harness/specs/04-deterministic-simulator/spec.md",
+    ".harness/specs/05-mechanical-gate/spec.md",
+    ".harness/specs/06-mcp-llm-orchestration/spec.md",
+    ".harness/specs/07-dashboard-and-observability/spec.md",
+    ".harness/specs/08-platform-delivery-and-tenant-model/spec.md",
+    ".harness/specs/09-ingestion-security-and-execution-limits/spec.md",
+    ".harness/docs/architecture/mcp-gateway.md",
+    ".harness/docs/architecture/knowledge-graph.md",
+    ".harness/docs/architecture/clean-architecture.md",
+    ".harness/docs/architecture/dependency-rules.md",
+    ".harness/docs/architecture/deterministic-simulator.md"
+  ],
+  "counts": {
+    "rules": 5,
+    "skills": 4,
+    "specs": 10,
+    "docs": 5
+  }
+}

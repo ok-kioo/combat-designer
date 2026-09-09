@@ -1,0 +1,14 @@
+[package]
+name = "combat-simulation"
+version = "0.1.0"
+edition = "2021"
+description = "Pure, deterministic discrete frame-clock combat simulation engine"
+
+[dependencies]
+combat-domain = { path = "../combat-domain" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+thiserror = "2.0"
+
+[dev-dependencies]
+proptest = "1.6"

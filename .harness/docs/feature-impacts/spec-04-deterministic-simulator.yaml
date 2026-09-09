@@ -1,0 +1,136 @@
+feature_id: spec-04-deterministic-simulator
+title: Deterministic Combat Simulator Engine & Application Port
+owner: Implementation Agent
+status: verified
+intent: Implement pure, deterministic discrete frame-clock combat simulation in Rust (engine/combat-simulation) with strict 10-step contract frame execution loop, integer arithmetic only, zero wall-clock/sleep, deterministic tie-breaking, execution budget exhaustion (BUDGET_EXCEEDED), canonical SHA-256 state hashing, and Application layer SimulationPort.
+non_goals:
+  - Simulator strictly answers "WHAT HAPPENS?"; never decides safety or mechanical validity (Spec 05 Mechanical Gate responsibility).
+  - Simulator does not grant authorization (Gateway responsibility).
+  - Simulator does not expose direct HTTP/WebSocket/LLM access.
+domain_owner: simulation
+
+approval:
+  gate_run_id: null
+  gate_rule_set_version: null
+  model_revision: null
+  approved_by: null
+  approved_at: null
+  approval_evidence: null
+
+contracts:
+  - name: simulation-port-v1
+    version: v1
+    change: additive
+  - name: simulation-trace-v1
+    version: v1
+    change: additive
+  - name: execution-budget-v1
+    version: v1
+    change: additive
+
+categories:
+  - simulation
+  - domain
+  - security
+  - workspace
+  - audit
+
+data_sources:
+  - Canonical Combat Snapshot
+  - SimulationScenario
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added:
+    - neutral
+    - startup
+    - active
+    - recovery
+    - hitstun
+    - blockstun
+  transitions_added:
+    - neutral -> startup
+    - startup -> active
+    - active -> recovery
+    - recovery -> neutral
+    - "* -> hitstun"
+    - "* -> blockstun"
+    - "active -> startup (cancel)"
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected: []
+  workspace_rules_changed: []
+
+security:
+  threats_addressed:
+    - "04.SEC.1 Unbounded Simulation Loop / DoS (Enforced ExecutionBudget: max_frames, max_events, max_transitions, max_entities returning BUDGET_EXCEEDED)"
+    - "04.SEC.2 Nondeterministic Float Divergence (Zero floating-point gameplay math; 100% integer frames, permille damage)"
+    - "04.SEC.3 Wall-Clock / Timing Side-Channels (Zero system clock, instant, sleep, or unseeded random)"
+    - "04.SEC.4 Race Conditions in Concurrent Hits (Deterministic tie-breaking by frame, actor_id, attack_id, sequence)"
+    - "04.SEC.5 Cross-Workspace State Leakage (Application layer SimulationPort validates authorized workspace_id before execution)"
+  invariants_affected:
+    - GW-I01
+    - GW-I02
+    - GW-I03
+
+audit:
+  events_added:
+    - simulation.scenario.executed
+    - simulation.budget.exceeded
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added: []
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - engine/combat-simulation/tests/simulator_tests.rs
+    - engine/combat-simulation/tests/budget_tests.rs
+    - engine/combat-simulation/tests/determinism_tests.rs
+    - engine/combat-simulation/tests/architecture_isolation_test.rs
+    - backend/application/tests/simulation.test.ts
+  integration: []
+  property:
+    - engine/combat-simulation/tests/property_tests.rs
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - simulation_duration_ms
+    - simulation_frames_total
+    - simulation_events_total
+    - simulation_budget_exceeded_total
+  traces: []
+  logs: []
+
+rollback: Revert engine/combat-simulation, backend/application, and shared simulation contracts.
+risks: Complex combat scenario state combinations could exceed standard execution budgets; mitigated by tunable ExecutionBudget parameters and explicit BUDGET_EXCEEDED handling.

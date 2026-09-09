@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, type: 3}
+  m_Name: HeavyCleave
+  attackId: heavy_cleave_01
+  attackName: Heavy Cleave
+  startupFrames: 15
+  activeFrames: 5
+  recoveryFrames: 25
+  damage: 220
+  hitstunFrames: 30
+  hitstopFrames: 8
+  blockstunFrames: 16
+  chipDamage: 40
+  guardBreakValue: 60
+  invulnWindows: []
+  armorWindows: []
+  resourceCosts:
+    - resourceType: stamina
+      amount: 45
+      costFrame: 0
+  hitboxes:
+    - id: hb_cleave
+      hitboxType: strike
+      shape:
+        shapeType: box
+        width: 180
+        height: 90
+      activeWindow:
+        start: 15
+        end: 20
+      damageMultiplierPermille: 1000
+      knockbackX: 120
+      knockbackY: 30
+      launch: true
+  cancels: []
+  tags:
+    - heavy
+    - slash
