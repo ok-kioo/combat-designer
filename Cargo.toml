@@ -1,7 +1,5 @@
 [workspace]
 resolver = "2"
 members = [
-  "engine/combat-domain",
-  "engine/combat-simulation",
-  "engine/combat-verification",
+  "engine",
 ]

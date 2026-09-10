@@ -1,0 +1,59 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "type": "stat",
+      "title": "Total Simulation Runs",
+      "targets": [{ "expr": "sum(simulation_count)", "legendFormat": "Total" }]
+    },
+    {
+      "id": 2,
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "type": "stat",
+      "title": "Simulation Failures",
+      "targets": [{ "expr": "sum(simulation_failure_count)", "legendFormat": "Failures" }]
+    },
+    {
+      "id": 3,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "type": "stat",
+      "title": "Budget Exhaustions",
+      "targets": [{ "expr": "sum(simulation_budget_exceeded_count)", "legendFormat": "Budget Exceeded" }]
+    },
+    {
+      "id": 4,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "type": "timeseries",
+      "title": "Simulation Duration (ms)",
+      "targets": [{ "expr": "rate(simulation_duration_ms_sum[1m]) / rate(simulation_duration_ms_count[1m])", "legendFormat": "Avg Duration" }]
+    },
+    {
+      "id": 5,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "type": "timeseries",
+      "title": "Frames & Events Computed",
+      "targets": [
+        { "expr": "rate(simulation_frames_total[1m])", "legendFormat": "Frames/sec" },
+        { "expr": "rate(simulation_events_total[1m])", "legendFormat": "Events/sec" }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["simulation", "engine"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Deterministic Simulator Telemetry",
+  "uid": "simulator-telemetry",
+  "version": 1
+}

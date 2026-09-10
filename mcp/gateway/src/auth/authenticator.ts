@@ -1,5 +1,5 @@
-import type { Principal } from "@combat-designer/shared-contracts";
-import { PrincipalSchema, McpError } from "@combat-designer/shared-contracts";
+import type { Principal } from "@combat-designer/backend";
+import { PrincipalSchema, McpError } from "@combat-designer/backend";
 
 export class GatewayAuthenticator {
   authenticate(principalCandidate: unknown): Principal {

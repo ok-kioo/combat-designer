@@ -1,0 +1,99 @@
+feature_id: domain-oriented-folder-structure
+title: Domain-Oriented Folder Structure Migration
+owner: Platform Architecture
+status: verified
+intent: Migração estrutural para arquitetura limpa e DDD sob pastas src/ canônicas em backend/ e engine/, eliminando pastas utilitárias dispersas fora de src/ e src/ repetitivos em subdiretórios.
+non_goals:
+  - Nenhuma alteração de comportamento de domínio.
+  - Nenhuma alteração nas mecânicas de combate e determinismo do engine.
+  - Nenhuma alteração na lógica de negócio canônica.
+  - Nenhuma alteração no Mechanical Gate.
+domain_owner: platform-architecture
+
+approval:
+  gate_run_id: gate_run_arch_001
+  gate_rule_set_version: "1.0.0"
+  model_revision: "rev-2026-09-09"
+  approved_by: "platform_lead"
+  approved_at: "2026-09-09T22:15:00Z"
+  approval_evidence: "Automated regression tests and architecture boundaries module-boundaries.test.ts 16/16 passing."
+
+contracts:
+  - name: domain-oriented-folder-structure
+    version: v1
+    change: none
+
+categories:
+  - infrastructure
+  - api
+  - observability
+  - verification
+
+data_sources: []
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected: []
+  workspace_rules_changed: []
+
+security:
+  threats_addressed: []
+  invariants_affected: []
+
+audit:
+  events_added: []
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added: []
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - backend/tests/unit
+    - engine/tests
+  integration:
+    - backend/tests/integration
+    - mcp/tests
+  property: []
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics: []
+  traces: []
+  logs: []
+
+rollback: Clean revert of git commit restoring previous folder layout; zero state or database migration required.
+risks: Minimal risk; pure folder structure refactor validated by module boundary tests and full test suites.

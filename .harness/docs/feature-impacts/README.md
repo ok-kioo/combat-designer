@@ -19,6 +19,10 @@ Nenhuma funcionalidade pode transicionar para o status `released` sem:
 | `spec-02-engine-ingestion` | Engine Ingestion Pipeline (Unity Export Bundle MVP) | `verified` | Implementation Agent | [spec-02-engine-ingestion.yaml](./spec-02-engine-ingestion.yaml) |
 | `spec-03-knowledge-graph` | Knowledge Graph Projection & Query Catalog | `verified` | Implementation Agent | [spec-03-knowledge-graph.yaml](./spec-03-knowledge-graph.yaml) |
 | `spec-04-deterministic-simulator` | Deterministic Combat Simulator Engine & Application Port | `verified` | Implementation Agent | [spec-04-deterministic-simulator.yaml](./spec-04-deterministic-simulator.yaml) |
+| `spec-05-mechanical-gate` | Mechanical Gate & Safety Invariants | `verified` | Implementation Agent | [spec-05-mechanical-gate.yaml](./spec-05-mechanical-gate.yaml) |
+| `spec-06-mcp-llm-orchestration` | MCP Gateway + Server + LLM Orchestration | `verified` | Implementation Agent | [spec-06-mcp-llm-orchestration.yaml](./spec-06-mcp-llm-orchestration.yaml) |
+| `spec-07-observability-operations` | Observability and Operations Stack | `verified` | Implementation Agent | [spec-07-observability-operations.yaml](./spec-07-observability-operations.yaml) |
+| `domain-oriented-folder-structure` | Domain-Oriented Folder Structure Migration | `verified` | Platform Architecture | [domain-oriented-folder-structure.yaml](./domain-oriented-folder-structure.yaml) |
 
 ## Como Criar um Novo FIC
 

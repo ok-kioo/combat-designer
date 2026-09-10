@@ -1,0 +1,50 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "type": "bargauge",
+      "title": "ChangeSets by Lifecycle State",
+      "targets": [
+        { "expr": "sum(changeset_proposed_count)", "legendFormat": "PROPOSED" },
+        { "expr": "sum(changeset_simulated_count)", "legendFormat": "SIMULATED" },
+        { "expr": "sum(changeset_verified_count)", "legendFormat": "VERIFIED" },
+        { "expr": "sum(changeset_approved_count)", "legendFormat": "APPROVED" },
+        { "expr": "sum(changeset_applied_count)", "legendFormat": "APPLIED" },
+        { "expr": "sum(changeset_withdrawn_count)", "legendFormat": "WITHDRAWN" },
+        { "expr": "sum(changeset_rejected_count)", "legendFormat": "REJECTED" }
+      ]
+    },
+    {
+      "id": 2,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "type": "timeseries",
+      "title": "Human Approvals Rate",
+      "targets": [{ "expr": "rate(changeset_approved_count[5m])", "legendFormat": "Approvals/sec" }]
+    },
+    {
+      "id": 3,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "type": "timeseries",
+      "title": "Apply Commits Rate",
+      "targets": [{ "expr": "rate(changeset_applied_count[5m])", "legendFormat": "Applies/sec" }]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["changesets", "lifecycle"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "ChangeSets Lifecycle Telemetry",
+  "uid": "changesets-lifecycle",
+  "version": 1
+}

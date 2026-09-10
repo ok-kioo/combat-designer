@@ -11,10 +11,9 @@
     "sourceMap": true
   },
   "references": [
-    { "path": "./backend/contracts" },
-    { "path": "./backend/application" },
-    { "path": "./backend/infrastructure/ingestion" },
-    { "path": "./backend/infrastructure/neo4j" }
+    { "path": "./backend" },
+    { "path": "./mcp" },
+    { "path": "./frontend" }
   ],
   "files": []
 }

@@ -124,22 +124,34 @@ combat-designer-harness/
 ```text
 combat-designer-harness/
 ├── engine/                                 # Rust deterministic core (zero float, frame clock, puro)
-│   ├── combat-domain/                      # Entidades canônicas e invariantes estruturais
-│   ├── combat-simulation/                  # Simulador de combate determinístico discreto
+│   ├── src/
+│   │   ├── domain/                         # Entidades canônicas e invariantes estruturais
+│   │   ├── simulation/                     # Simulador de combate determinístico discreto
+│   │   └── verification/                   # Mechanical gate e verificador de invariantes
+│   ├── tests/                              # Suíte de integração pura em Rust (14 arquivos)
 │   └── target/                             # Build artifacts Rust (gitignored; proibido no root)
-├── backend/                                # Camada TypeScript de contratos e aplicação
-│   ├── contracts/                          # DTOs, schemas Zod e tipos de fronteira
-│   ├── application/                        # Orquestração de casos de uso e portas abstratas
-│   └── infrastructure/                     # Adaptadores concretos
-│       ├── ingestion/                      # Ingestão e normalização de bundles de engine
-│       │   ├── exporters/unity/            # Scripts de exportação Unity
-│       │   └── fixtures/unity-bundle/      # Bundles reais de engine para testes
-│       └── neo4j/                          # Projeção e busca no Knowledge Graph
+├── backend/                                # Pacote unificado @combat-designer/backend (Clean Architecture / DDD)
+│   ├── src/
+│   │   ├── modules/                        # Domínio e Casos de Uso
+│   │   │   ├── combat/                     # domain/entity, domain/repository, service
+│   │   │   ├── changeset/                  # domain/entity, domain/repository, service
+│   │   │   ├── fic/                        # domain/entity (schemas, validator)
+│   │   │   ├── mcp/                        # domain/entity (auth, audit, tools, errors)
+│   │   │   ├── ingestion/                  # domain/entity
+│   │   │   └── observability/              # domain/entity, domain/repository
+│   │   └── infrastructure/                 # Adaptadores e Provedores Concretos
+│   │       ├── http/                       # Servidor HTTP / API REST
+│   │       └── provider/                   # Ingestion, Knowledge-Graph, Observability
+│   └── tests/                              # Testes unitários e de integração
 ├── mcp/                                    # Protocolo Model Context Protocol
 │   ├── gateway/                            # Fronteira de segurança, autenticação e policy
 │   ├── server/                             # Definição e exposição de ferramentas MCP
 │   └── tests/                              # Suíte de testes MCP
 ├── frontend/                               # Interface de usuário (React / Next.js)
+│   ├── app/                                # App shell e rotas
+│   ├── features/                           # Organização vertical por capacidades de produto
+│   ├── shared/                             # Componentes e utilitários compartilhados
+│   └── tests/                              # Testes de frontend
 ├── shared/                                 # Artefatos genuinamente compartilhados
 │   └── architecture/                       # Verificadores de fronteiras e integridade
 ├── Cargo.lock
@@ -155,13 +167,13 @@ combat-designer-harness/
 
 ### Responsabilidades dos Módulos
 
-**`engine/*`** — Núcleo puro em Rust. Implementa modelos canônicos e o simulador determinístico baseado em frame clock discreto e aritmética inteira. Proibido o uso de floats, relógio de parede do sistema (`std::time`), concorrência não determinística ou dependências de rede/banco. Build artifacts são gerados em `engine/target/` (nunca no root).
+**`engine/*`** — Núcleo puro em Rust (`combat-engine`). Implementa modelos canônicos (`src/domain/`), o simulador determinístico (`src/simulation/`) baseado em frame clock discreto e aritmética inteira, e a verificação mecânica de segurança (`src/verification/`). Proibido o uso de floats, relógio de parede do sistema (`std::time`), concorrência não determinística ou dependências de rede/banco. Build artifacts são gerados em `engine/target/` (nunca no root).
 
-**`backend/contracts`** — Contratos de fronteira, schemas tipados (Zod) e serialização canônica. Não duplica lógica de física ou regras mecânicas de simulação.
-
-**`backend/application`** — Orquestração de casos de uso, validação estrutural de intenções e gerenciamento de portas (`SimulationPort`, etc.). Desacoplado de drivers concretos.
-
-**`backend/infrastructure/*`** — Adaptadores concretos (`neo4j`, `ingestion`). Conhecem drivers, formatos específicos de engines (Unity YAML), fixtures locais e bancos, mas não contêm regras canônicas de domínio.
+**`backend/*`** — Pacote unificado `@combat-designer/backend` seguindo princípios de Arquitetura Limpa e DDD:
+- **`src/modules/*/domain/`**: Entidades canônicas, invariantes de domínio e contratos de repositório/portas.
+- **`src/modules/*/service/`**: Casos de uso de aplicação (simulação, verificação, ciclo de vida de changeset, queries de grafo).
+- **`src/infrastructure/provider/`**: Adaptadores concretos (parsers de Unity YAML, projeção Neo4j, pipeline OpenTelemetry/Prometheus).
+- **`src/infrastructure/http/`**: Servidor HTTP operacional para health checks e métricas de scraping.
 
 **`mcp/gateway`** — Autenticação, autorização, isolamento rigoroso de workspace, enforcement de capabilities, rate limits e trilha de auditoria. Trata o LLM como chamador não confiável (*untrusted*).
 

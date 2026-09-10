@@ -1,6 +1,6 @@
 import type { AuthorizedToolCallContext } from "../../../gateway/src/routing/router.js";
 import type { ApplicationAdapter } from "../adapters/application-adapter.js";
-import { McpError } from "@combat-designer/shared-contracts";
+import { McpError } from "@combat-designer/backend";
 
 export function createToolHandlers(adapter: ApplicationAdapter) {
   return {

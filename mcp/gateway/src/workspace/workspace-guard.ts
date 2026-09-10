@@ -1,5 +1,5 @@
-import type { Principal } from "@combat-designer/shared-contracts";
-import { McpError } from "@combat-designer/shared-contracts";
+import type { Principal } from "@combat-designer/backend";
+import { McpError } from "@combat-designer/backend";
 
 export class GatewayWorkspaceGuard {
   validateWorkspaceAccess(

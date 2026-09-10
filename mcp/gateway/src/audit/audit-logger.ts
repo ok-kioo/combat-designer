@@ -1,5 +1,5 @@
-import type { AuditEvent, Principal } from "@combat-designer/shared-contracts";
-import { redactSensitiveData } from "@combat-designer/shared-contracts";
+import type { AuditEvent, Principal } from "@combat-designer/backend";
+import { redactSensitiveData } from "@combat-designer/backend";
 import crypto from "node:crypto";
 
 export class GatewayAuditLogger {

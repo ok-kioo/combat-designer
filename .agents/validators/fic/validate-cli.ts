@@ -1,6 +1,5 @@
-#!/usr/bin/env node
 import path from "node:path";
-import { validateFicFile, validateFicRegistry } from "../../../backend/contracts/src/fic/validator.js";
+import { validateFicFile, validateFicRegistry } from "../../../backend/dist/modules/fic/domain/entity/validator.js";
 
 function main() {
   const args = process.argv.slice(2);
@@ -31,12 +30,21 @@ function main() {
     process.exit(1);
   }
 
-  console.log(`Found ${summary.total} FIC(s).`);
+  const runtimeFics = summary.results.filter(
+    (r) => !r.filePath?.endsWith("template.yaml") && r.data?.feature_id !== "example-feature-001"
+  );
+  const templateFics = summary.results.filter(
+    (r) => r.filePath?.endsWith("template.yaml") || r.data?.feature_id === "example-feature-001"
+  );
+
+  console.log(`Found ${summary.total} FIC(s) (${runtimeFics.length} runtime FICs, ${templateFics.length} template).`);
   let hasFailures = false;
 
   for (const res of summary.results) {
+    const isTemplate = res.filePath?.endsWith("template.yaml") || res.data?.feature_id === "example-feature-001";
+    const tag = isTemplate ? " [template]" : "";
     if (res.valid) {
-      console.log(`  \x1b[32m✔\x1b[0m ${res.data?.feature_id} (${res.filePath})`);
+      console.log(`  \x1b[32m✔\x1b[0m ${res.data?.feature_id}${tag} (${res.filePath})`);
     } else {
       hasFailures = true;
       console.error(`  \x1b[31m✖\x1b[0m ${res.filePath}:`);
@@ -51,7 +59,8 @@ function main() {
     process.exit(1);
   }
 
-  console.log(`\n\x1b[32m[PASSED]\x1b[0m All ${summary.total} FICs are valid.`);
+  const runtimeValidCount = runtimeFics.filter((r) => r.valid).length;
+  console.log(`\n\x1b[32m[PASSED]\x1b[0m Runtime FICs: ${runtimeValidCount}/${runtimeFics.length} valid. Template: ${templateFics.length} valid (not counted as runtime SPEC). All ${summary.total} files valid.`);
   process.exit(0);
 }
 

@@ -1,4 +1,4 @@
-import type { Principal, AuthorizationDecision } from "@combat-designer/shared-contracts";
+import type { Principal, AuthorizationDecision } from "@combat-designer/backend";
 import type { ToolRegistration } from "../capabilities/registry.js";
 
 export interface AuthorizationContext {

@@ -1,4 +1,4 @@
-import { McpError, type McpErrorEnvelope } from "@combat-designer/shared-contracts";
+import { McpError, type McpErrorEnvelope } from "@combat-designer/backend";
 
 export class McpErrorTranslator {
   translate(error: unknown): McpErrorEnvelope {

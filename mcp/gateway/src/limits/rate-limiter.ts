@@ -1,4 +1,4 @@
-import { McpError } from "@combat-designer/shared-contracts";
+import { McpError } from "@combat-designer/backend";
 
 export interface RateLimiterOptions {
   maxRequestSizeBytes?: number;

@@ -1,4 +1,4 @@
-import { McpError, type McpErrorCode } from "@combat-designer/shared-contracts";
+import { McpError, type McpErrorCode } from "@combat-designer/backend";
 
 export class GatewaySecurityError extends McpError {
   constructor(code: McpErrorCode, message: string, details?: Record<string, unknown>) {

@@ -7,7 +7,7 @@ import type {
   ImpactAnalysisResult,
   ProvenanceInfo,
   ScenarioSummary,
-} from "@combat-designer/application";
+} from "@combat-designer/backend";
 import {
   searchCombatUseCase,
   getAttackUseCase,
@@ -18,7 +18,7 @@ import {
   withdrawChangesetUseCase,
   approveChangesetUseCase,
   applyChangesetUseCase,
-} from "@combat-designer/application";
+} from "@combat-designer/backend";
 import type {
   Principal,
   SimulationInput,
@@ -27,7 +27,7 @@ import type {
   GateResult,
   ChangeSetProposal,
   ChangeSetMutation,
-} from "@combat-designer/shared-contracts";
+} from "@combat-designer/backend";
 
 export interface ApplicationPortsBundle {
   simulationPort: SimulationPort;

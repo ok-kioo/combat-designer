@@ -7,7 +7,7 @@ import type {
   ImpactAnalysisResult,
   ProvenanceInfo,
   ScenarioSummary,
-} from "@combat-designer/application";
+} from "@combat-designer/backend";
 import type {
   Principal,
   SimulationInput,
@@ -15,7 +15,7 @@ import type {
   VerificationRequest,
   GateResult,
   ChangeSetProposal,
-} from "@combat-designer/shared-contracts";
+} from "@combat-designer/backend";
 import { ApplicationAdapter } from "../../server/src/adapters/application-adapter.js";
 import { McpGatewayRouter } from "../../gateway/src/routing/router.js";
 import { CombatDesignerMcpServer } from "../../server/src/mcp-server.js";

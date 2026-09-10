@@ -1,0 +1,130 @@
+feature_id: platform-delivery-001
+title: Export Bundle Delivery and Multi-Tenant Workspace Model
+owner: Implementation Agent
+status: verified
+intent: Implement hermetic platform delivery boundary where backend never accesses client filesystem directly; input arrives as Export Bundles (Unity/Unreal/Godot) over HTTP upload scoped to mandatory workspace_id. Provide two-column Combat Explorer UI (Project Panel and Combat Director) and strict multi-tenant partition across Postgres, Neo4j, and MCP.
+non_goals:
+  - No direct backend connections to user machines or client socket servers.
+  - No client-side bypass of server-side ingestion normalization or envelope validation.
+  - No alteration of Rust engine physics or frame clock determinism.
+domain_owner: platform-architecture
+
+approval:
+  gate_run_id: gate_run_spec08_delivery_001
+  gate_rule_set_version: "1.0.0"
+  model_revision: "rev-1"
+  approved_by: "human_lead"
+  approved_at: "2026-09-09T23:25:00Z"
+  approval_evidence: "Automated regression tests, functional tests (08.T.1-15), security tests (08.SEC.1-10), and architecture boundaries all passing."
+
+contracts:
+  - name: export-bundle-manifest-v1
+    version: v1
+    change: additive
+  - name: workspace-model-v1
+    version: v1
+    change: additive
+
+categories:
+  - infrastructure
+  - api
+  - security
+  - domain
+
+data_sources:
+  - ExportBundleUpload
+
+kg:
+  nodes_added: []
+  nodes_changed:
+    - Attack
+    - Hitbox
+    - CancelRule
+    - CombatState
+    - Resource
+    - Archetype
+    - Scenario
+    - Provenance
+    - ProjectionMetadata
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected:
+    - designer
+    - system
+  workspace_rules_changed:
+    - "Mandatory workspace_id authorization check on HTTP bundle upload and status query"
+
+security:
+  threats_addressed:
+    - "Arbitrary filesystem traversal via client paths"
+    - "Cross-tenant leakage across workspaces"
+    - "Exporter/parser version divergence"
+    - "Tampered bundle contents and corrupted hashes"
+  invariants_affected:
+    - "Backend never accesses user filesystem directly"
+    - "Workspace isolation enforced in HTTP, Application, Postgres, and Neo4j"
+
+audit:
+  events_added:
+    - "bundle_upload_received"
+    - "bundle_ingestion_completed"
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added:
+    - "POST /api/workspaces/:workspace_id/bundles"
+    - "GET /api/workspaces/:workspace_id/status"
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations:
+    - "workspace_id mandatory column on snapshot and changeset records"
+  neo4j_migrations:
+    - "composite uniqueness constraints (workspace_id, entity_id) on all combat nodes"
+
+tests:
+  unit:
+    - frontend/tests/combat-explorer.test.ts
+  integration:
+    - backend/tests/integration/delivery/functional.test.ts
+    - backend/tests/integration/delivery/security.test.ts
+  property: []
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - "http_requests_total"
+    - "http_request_duration_ms"
+  traces:
+    - "http_post_bundles"
+    - "http_get_status"
+  logs:
+    - "http_request_finished"
+
+rollback: Clean revert of git commit; zero state migration required.
+risks: Cross-tenant boundary violation if workspace_id checks are omitted; mitigated by strict authorization assertions and composite index uniqueness.

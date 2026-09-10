@@ -3,7 +3,7 @@ import {
   type ResourceEnvelope,
   type Principal,
   McpError,
-} from "@combat-designer/shared-contracts";
+} from "@combat-designer/backend";
 import type { ApplicationAdapter } from "../adapters/application-adapter.js";
 
 export class ResourceProvider {

@@ -1,129 +1,57 @@
-# Spec 07 — Dashboard and Observability
+# Spec 07 — Observability + Operations
 
-## Layout
+## Status: COMPLETE
 
-Duas colunas, ambas escopadas ao `workspace_id` ativo (specs/08, specs/09): painel do
-projeto à esquerda (upload de Export Bundle, status de ingestão, revision/snapshot atual,
-histórico de gates/simulações) e o Diretor de Combate (chat MCP/LLM) à direita. O painel
-esquerdo nunca escreve diretamente em canonical data — upload dispara o pipeline de specs/02.
+## Overview
 
-Toda interação do Diretor de Combate passa pelo MCP Gateway antes de alcançar o MCP Server
-e o Application Layer (specs/06, docs/architecture/mcp-gateway.md).
+O SPEC 07 implementa a camada de **observabilidade interna, operacional e de desenvolvimento**, separada da experiência de produto do Combat Designer.
 
-## Telas MVP
+A stack de observabilidade atende aos responsáveis pela operação, desenvolvimento, diagnóstico, segurança e manutenção da plataforma:
+- **Metrics**: Métricas operacionais via OpenTelemetry Metrics (`/metrics` para Prometheus scraping).
+- **Logs**: Structured JSON logging com redaction automática e recursiva de credenciais e tokens.
+- **Traces**: W3C Trace Context propagation nativo via OpenTelemetry SDK/API (`traceparent`, `tracestate`).
+- **Health**: Endpoints operacionais sanitizados (`/health/live`, `/health/ready`, `/health/dependencies`).
+- **Dashboards**: Grafana provisioning e definições declarativas para API, Gateway, Simulator, Mechanical Gate, ChangeSets e Infraestrutura.
 
-### Combat Explorer
+---
 
-Timeline, startup, active, recovery, hitstun, hitstop, custos e cancels.
+## Separação Arquitetural: Product vs. Operations
 
-### Graph Explorer
+A plataforma estabelece uma fronteira não negociável entre Product e Operations:
+- **Product UI (`frontend/`)**: Interface exclusiva do jogo/designer. Não contém painéis operacionais de telemetria, não expõe métricas de infraestrutura, e não possui dependências com Prometheus, Grafana, Loki, Tempo ou OTel Collector.
+- **Operations Stack (`observability/`, `backend/api`)**: Camada interna protegida por barreira de acesso e isolamento de rede.
 
-Ataque -> cancel -> ataque; ataque -> reação; ataque -> recurso.
+---
 
-### Simulation
+## Authority & Failure Invariants
 
-Frame, state, hitbox, events, resources e combo count.
+1. **Authority**:
+   - `Observability observes; it NEVER authorizes, verifies, approves, applies, or mutates canonical state.`
+   - Telemetria nunca converte `FAIL`/`BLOCKED`/`STALE`/`BUDGET_EXCEEDED` para `PASS`.
+   - Telemetria nunca aprova nem aplica um ChangeSet.
+2. **Domain Purity**:
+   - Crates Rust (`combat-domain`, `combat-simulation`, `combat-verification`) permanecem 100% puros, determinísticos, baseados em inteiros e livres de frameworks de telemetria.
+3. **Telemetry Failure Isolation**:
+   - Falhas na stack de telemetria são non-fatal (`domain correctness > telemetry delivery`).
+   - O domínio e a aplicação continuam produzindo o mesmo resultado determinístico mesmo sob pane total do coletor ou exportadores de telemetria.
+4. **Cardinality Protection**:
+   - Identificadores individuais (`trace_id`, `span_id`, `request_id`, `correlation_id`, `attack_id`, `changeset_id`, `simulation_id`, `gate_run_id`, `event_id`) são estritamente proibidos como labels de métricas.
 
-### Gate Report
+---
 
-PASS/FAIL/BLOCKED/STALE/BUDGET_EXCEEDED, regra, threshold, observado, evidência, simulation hash e sugestões. Um resultado `STALE` é exibido de forma visualmente distinta de `FAIL`, com o `model_revision`/`rule_set_version` original e um atalho para reexecutar o gate. `BUDGET_EXCEEDED` é exibido de forma distinta, indicando que o espaço de busca excedeu o orçamento.
+## Endpoints Operacionais
 
-## Métricas
+- `GET /health/live`: Liveness check (200 `{"status":"LIVE"}`).
+- `GET /health/ready`: Readiness check (200 `{"status":"READY"}` ou 503 `{"status":"UNHEALTHY"}`).
+- `GET /health/dependencies`: Dependency health sanitizado (Postgres, Neo4j, MCP, API). Protegido por barreira operacional (403 se não autorizado).
+- `GET /metrics`: Prometheus exposition format via OpenTelemetry Metrics. Protegido por barreira operacional (403 se não autorizado).
 
-### Application / Domain
+---
 
-```text
-ingestion_duration
-ingestion_assets_total
-ingestion_assets_quarantined
-simulation_duration
-simulation_frames
-gate_duration
-gate_failures
-gate_stale_results
-llm_proposals
-changesets_blocked
-changesets_withdrawn
-```
+## Verificação
 
-### MCP Gateway
-
-```text
-mcp_gateway_requests_total
-mcp_gateway_denials_total
-mcp_gateway_authorization_failures
-mcp_gateway_workspace_denials
-mcp_gateway_capability_denials
-mcp_gateway_policy_denials
-mcp_gateway_latency
-mcp_gateway_tool_calls
-mcp_gateway_apply_attempts
-mcp_gateway_apply_denials
-```
-
-### MCP Server
-
-```text
-mcp_tool_calls
-mcp_tool_errors
-mcp_tool_latency
-```
-
-## Traces
-
-```text
-mcp.request
-  -> gateway.authorize
-    -> mcp_server.tool
-      -> application.propose
-        -> graph.query
-        -> simulation.run
-        -> gate.run
-```
-
-## Correlation IDs
-
-```text
-trace_id
-principal_id
-workspace_id
-request_id
-revision_id
-changeset_id
-scenario_id
-gate_run_id
-```
-
-## Audit Events
-
-Eventos de auditoria emitidos pelo Gateway e pelo Application, contendo quando aplicável:
-
-```text
-trace_id
-principal_id
-principal_type
-workspace_id
-tool_id
-capability
-request_id
-revision_id
-changeset_id
-gate_run_id
-decision (ALLOW | DENY)
-reason
-timestamp
-```
-
-O `timestamp` pode existir na camada de infraestrutura/auditoria. Ele **não** deve entrar no cálculo determinístico do simulador — o simulador opera em frames inteiros sem relógio de sistema.
-
-## Regra
-
-UI nunca altera diretamente canonical data ou simulator state.
-
-UI não acessa banco diretamente — toda operação passa pelo API, que por sua vez opera sob as mesmas regras de autorização e validação do Application Layer.
-
-## Aceite
-
-Designer consegue seguir pergunta -> proposta -> simulação -> gate -> evidência sem acessar infraestrutura.
-
-O dashboard exibe métricas do Gateway (denials, authorization failures, workspace denials) de forma acessível para auditoria.
+- **Suíte Funcional**: `07.T.1` a `07.T.19` (19 testes passando).
+- **Suíte de Segurança**: `07.SEC.1` a `07.SEC.16` (16 testes passando).
+- **Suíte de Regressão SPEC 00–06**: 100% dos testes anteriores passando sem qualquer regressão.
+- **Feature Impact Contract**: `.harness/docs/feature-impacts/spec-07-observability-operations.yaml` validado programaticamente (8/8 runtime FICs).
+- **Walkthrough**: `.agents/walkthroughs/spec-07-observability-operations.md`.

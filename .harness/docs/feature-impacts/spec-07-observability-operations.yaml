@@ -1,0 +1,196 @@
+feature_id: spec-07-observability-operations
+title: Observability and Operations Stack
+owner: Implementation Agent
+status: verified
+intent: Implement internal platform observability stack providing native OpenTelemetry tracing, structured logging with recursive credential redaction, metrics instrumentation with cardinality protection, sanitized health checks, and operational endpoints with explicit access boundaries.
+non_goals:
+  - No product dashboard or operations UI in game frontend.
+  - No modification of deterministic domain state or mechanical gate verdicts.
+  - No bypass of application authorization or human approval requirements.
+  - SPECs 08 and 09 remain strictly NOT STARTED.
+domain_owner: operations
+
+approval:
+  gate_run_id: gate_run_spec07_obs_001
+  gate_rule_set_version: "1.0.0"
+  model_revision: "rev-1"
+  approved_by: "human_lead"
+  approved_at: "2026-09-09T20:30:00Z"
+  approval_evidence: "Automated regression tests, functional tests (07.T.1-19), security tests (07.SEC.1-16), and architecture boundary tests all passing."
+
+contracts:
+  - name: observability-trace-v1
+    version: v1
+    change: additive
+  - name: observability-logging-v1
+    version: v1
+    change: additive
+  - name: observability-metrics-v1
+    version: v1
+    change: additive
+  - name: observability-health-v1
+    version: v1
+    change: additive
+
+categories:
+  - observability
+  - infrastructure
+  - api
+  - security
+  - audit
+
+data_sources:
+  - TelemetryPort
+  - HealthCheckPort
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected: []
+  workspace_rules_changed: []
+
+security:
+  threats_addressed:
+    - High-cardinality metric label resource exhaustion and memory bloat
+    - Credential, secret, and token leakage in operational logs and metrics
+    - Telemetry backend outages or exporter failures crashing deterministic domain calculations
+    - Unauthenticated external access to internal operational telemetry endpoints
+    - Telemetry correlation context or trace context masquerading as authenticated principal
+    - Cross-workspace telemetry leakage and improper diagnostic isolation
+  invariants_affected:
+    - Fail-closed operational boundaries on /metrics and /health/dependencies
+    - Telemetry failure isolation ensuring zero alteration of domain outcomes
+    - Complete product frontend isolation from operations infrastructure
+
+audit:
+  events_added:
+    - http_request_finished
+    - telemetry_recorded
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added:
+    - GET /health/live
+    - GET /health/ready
+    - GET /health/dependencies
+    - GET /metrics
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - 07.T.11 health liveness works
+    - 07.T.12 health readiness works
+    - 07.T.13 dependency health works
+    - 07.T.14 metrics exposed in supported format
+    - 07.T.15 structured logs emitted
+    - 07.T.16 sensitive fields redacted
+  integration:
+    - 07.T.1 HTTP request creates trace
+    - 07.T.2 correlation propagates through application
+    - 07.T.3 MCP request is traceable
+    - 07.T.4 simulation produces telemetry
+    - 07.T.5 mechanical gate produces telemetry
+    - 07.T.6 changeset lifecycle emits telemetry
+    - 07.T.7 authorization denial emits telemetry
+    - 07.T.8 workspace mismatch emits telemetry
+    - 07.T.9 budget exhaustion emits telemetry
+    - 07.T.10 stale gate emits telemetry
+    - 07.T.17 trace correlation across major boundaries
+    - 07.T.18 Grafana and collector configuration valid
+    - 07.T.19 telemetry does not modify domain results
+    - 07.SEC.1 observability cannot mutate canonical state
+    - 07.SEC.2 metrics endpoint does not expose secrets
+    - 07.SEC.3 structured logs redact credentials
+    - 07.SEC.4 cross-workspace telemetry isolation
+    - 07.SEC.5 trace context cannot escalate authorization
+    - 07.SEC.6 correlation ID cannot become principal identity
+    - 07.SEC.7 observability cannot approve changeset
+    - 07.SEC.8 observability cannot apply changeset
+    - 07.SEC.9 observability cannot alter gate result
+    - 07.SEC.10 observability cannot alter simulation result
+    - 07.SEC.11 high-cardinality metric labels rejected
+    - 07.SEC.12 operational endpoints not exposed through product frontend
+    - 07.SEC.13 telemetry backend outage cannot change domain outcome
+    - 07.SEC.14 health endpoint does not expose internal dependency secrets
+    - 07.SEC.15 operational observability endpoints inaccessible from product API surface
+    - 07.SEC.16 telemetry cannot inject or override authenticated principal
+  property: []
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - api_request_count
+    - api_request_error_count
+    - api_request_latency_ms
+    - gateway_auth_allow_count
+    - gateway_auth_deny_count
+    - gateway_workspace_mismatch_count
+    - gateway_policy_denied_count
+    - gateway_rate_limited_count
+    - simulation_count
+    - simulation_failure_count
+    - simulation_budget_exceeded_count
+    - simulation_duration_ms
+    - simulation_frames_total
+    - simulation_events_total
+    - gate_run_count
+    - gate_pass_count
+    - gate_fail_count
+    - gate_blocked_count
+    - gate_stale_count
+    - gate_budget_exceeded_count
+    - gate_error_count
+    - gate_duration_ms
+    - changeset_proposed_count
+    - changeset_simulated_count
+    - changeset_verified_count
+    - changeset_approved_count
+    - changeset_applied_count
+    - changeset_withdrawn_count
+    - changeset_rejected_count
+  traces:
+    - http_request
+    - gateway_authorize
+    - mcp_tool_execution
+    - simulation_run
+    - gate_run
+  logs:
+    - http_request_finished
+    - gateway_decision
+    - simulation_executed
+    - gate_evaluated
+    - changeset_transitioned
+
+rollback: Clean revert of git commit; no state migration required.
+risks: Minimal risk; fail-safe telemetry isolation ensures domain correctness is preserved.

@@ -1,1 +1,1 @@
-export * from "@combat-designer/shared-contracts";
+export * from "@combat-designer/backend";

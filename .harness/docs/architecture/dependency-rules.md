@@ -8,13 +8,16 @@ Para manter o desacoplamento e a integridade determinística do Combat Designer,
 
 | Camada / Componente | Dependências Permitidas | Dependências Proibidas |
 |---|---|---|
-| **Domain** (`engine/combat-domain`) | Nenhuma (Rust core, serde) | MCP, HTTP, Fastify, React, Neo4j, PostgreSQL, Docker, System Clock, floats para gameplay |
-| **Simulator** (`engine/combat-simulation`) | `combat-domain`, serde, sha2, thiserror | System Clock (`Instant`, `SystemTime`), floats (`f32`, `f64`), MCP, HTTP, Neo4j, PostgreSQL, async runtimes |
-| **Application** (`backend/application`) | `contracts`, `domain` (via types), Ports | Drivers concretos de Neo4j/Postgres, MCP SDK, Fastify, React |
-| **Contracts** (`backend/contracts`) | Bibliotecas de serialização/validação (Zod) | Lógica mecânica de combate, persistência, drivers |
-| **Infrastructure** (`backend/infrastructure/neo4j`, `backend/infrastructure/ingestion`, etc.) | Ports, Drivers de banco, Filesystem, Contracts | Regras de domínio de combate, MCP, React |
-| **MCP Server** (`mcp/server`) | Contracts, Application use cases, MCP SDK | PostgreSQL direto, Neo4j direto, Cypher direto, autorização direta |
-| **MCP Gateway** (`mcp/gateway`) | Policies, Audit, Limits, Token/Auth | Regras de combate, simulador, persistência canônica |
+| Camada / Componente | Dependências Permitidas | Dependências Proibidas |
+|---|---|---|
+| **Domain** (`engine/src/domain`) | Nenhuma (Rust core, serde) | MCP, HTTP, Fastify, React, Neo4j, PostgreSQL, Docker, System Clock, floats para gameplay |
+| **Simulator** (`engine/src/simulation`) | `domain`, serde, sha2, thiserror | System Clock (`Instant`, `SystemTime`), floats (`f32`, `f64`), MCP, HTTP, Neo4j, PostgreSQL, async runtimes |
+| **Verification** (`engine/src/verification`) | `domain`, `simulation`, serde, sha2, thiserror | System Clock, floats, MCP, HTTP, Neo4j, PostgreSQL |
+| **Backend Domain & Services** (`backend/src/modules/*`) | `backend/src/modules/*/domain`, Ports | Drivers concretos de Neo4j/Postgres, MCP SDK, React |
+| **Backend Infrastructure Providers** (`backend/src/infrastructure/provider/*`) | Ports, Drivers de banco, Filesystem, Schemas | Regras de domínio de combate, MCP, React |
+| **Backend HTTP** (`backend/src/infrastructure/http/*`) | Use cases, Health, Metrics, Node HTTP | Regras canônicas de domínio, MCP direct access |
+| **MCP Server** (`mcp/server`) | `@combat-designer/backend`, MCP SDK | PostgreSQL direto, Neo4j direto, Cypher direto, autorização direta |
+| **MCP Gateway** (`mcp/gateway`) | Policies, Audit, Limits, Token/Auth, `@combat-designer/backend` | Regras de combate, simulador, persistência canônica |
 
 ---
 

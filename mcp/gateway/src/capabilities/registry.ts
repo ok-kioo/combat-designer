@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Capability, CanonicalToolName, ResponseClassification } from "@combat-designer/shared-contracts";
+import type { Capability, CanonicalToolName, ResponseClassification } from "@combat-designer/backend";
 import {
   resolveCanonicalToolName,
   CombatSearchInputSchema,
@@ -13,7 +13,7 @@ import {
   CombatGetChangeInputSchema,
   CombatWithdrawChangeInputSchema,
   CombatApplyChangeInputSchema,
-} from "@combat-designer/shared-contracts";
+} from "@combat-designer/backend";
 
 export type Mutability = "READ" | "READ_SIMULATION" | "READ_VERIFICATION" | "PROPOSAL" | "WRITE";
 export type RiskLevel = "low" | "medium" | "high" | "critical";

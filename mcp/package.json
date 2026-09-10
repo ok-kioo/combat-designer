@@ -11,8 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@combat-designer/application": "^0.1.0",
-    "@combat-designer/shared-contracts": "^0.1.0",
+    "@combat-designer/backend": "*",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^3.24.2"
   },

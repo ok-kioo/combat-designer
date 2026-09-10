@@ -4,7 +4,7 @@ import { ResourceProvider } from "./resources/resource-provider.js";
 import type { ApplicationAdapter } from "./adapters/application-adapter.js";
 import { createToolHandlers } from "./tools/handlers.js";
 import { LlmOrchestrator } from "./orchestration/llm-orchestrator.js";
-import type { Principal } from "@combat-designer/shared-contracts";
+import type { Principal } from "@combat-designer/backend";
 
 export class CombatDesignerMcpServer {
   readonly sdkServer: McpServer;

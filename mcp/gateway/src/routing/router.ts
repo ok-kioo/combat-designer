@@ -1,5 +1,5 @@
-import type { Principal, CanonicalToolName } from "@combat-designer/shared-contracts";
-import { McpError } from "@combat-designer/shared-contracts";
+import type { Principal, CanonicalToolName } from "@combat-designer/backend";
+import { McpError } from "@combat-designer/backend";
 import { GatewayAuthenticator } from "../auth/authenticator.js";
 import { GatewayWorkspaceGuard } from "../workspace/workspace-guard.js";
 import { ToolRegistry, type ToolRegistration } from "../capabilities/registry.js";

@@ -4,7 +4,7 @@ import {
   type Principal,
   type GateResult,
   McpError,
-} from "@combat-designer/shared-contracts";
+} from "@combat-designer/backend";
 import type { McpGatewayRouter } from "../../../gateway/src/routing/router.js";
 import type { ApplicationAdapter } from "../adapters/application-adapter.js";
 

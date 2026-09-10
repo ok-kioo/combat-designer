@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { McpError } from "@combat-designer/shared-contracts";
+import { McpError } from "@combat-designer/backend";
 
 export class GatewayRequestValidator {
   validatePayload<T>(schema: z.ZodType<T>, payload: unknown): T {
