@@ -11,11 +11,17 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "start": "npm --workspace=backend run start",
+    "dev": "npm --workspace=backend run dev",
     "build": "npm run --workspaces --if-present build",
     "test": "npm run --workspaces --if-present test && vitest run shared/architecture",
     "test:architecture": "vitest run shared/architecture",
     "typecheck": "npm run --workspaces --if-present typecheck",
-    "validate-fic": "node --experimental-strip-types .agents/validators/fic/validate-cli.ts"
+    "validate-fic": "node --experimental-strip-types .agents/validators/fic/validate-cli.ts",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",

@@ -48,6 +48,7 @@ export const SENSITIVE_KEYS = new Set([
   "access_token",
   "refresh_token",
   "password",
+  "password_hash",
   "authorization",
   "api_key",
   "secret",

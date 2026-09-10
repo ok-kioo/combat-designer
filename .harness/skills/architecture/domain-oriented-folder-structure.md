@@ -1,182 +1,343 @@
-# Skill — Domain-Oriented Folder Structure
+# Skill — Domain-Oriented Folder Structure & Clean Architecture Layout
 
 ## Objetivo
 
-Eliminar pastas de utilitário (`api`, `infra`, `utils`, `common`, `helpers`, `shared` genérico) que agrupam por
-camada técnica em vez de domínio. Toda pasta — raiz, módulo ou pasta filha dentro de um módulo — deve nomear um
-domínio/capacidade de negócio, nunca um tipo de arquivo ou uma camada arquitetural isolada. Isso se aplica
-recursivamente: a regra que vale para a raiz do repositório vale também para dentro de `backend/`, `mcp/`, `frontend/`.
+Garantir que a organização física de pastas reflita fielmente os domínios de negócio e a hierarquia canônica de **Clean Architecture / Ports & Adapters (Arquitetura Hexagonal)**. Eliminar pastas utilitárias genéricas e pacotes técnicos dispersos no topo da hierarquia (`api`, `infra`, `utils`, `common`, `helpers`), assegurando que toda pasta nomeie uma capacidade de negócio ou uma camada formal de Clean Architecture com direção estrita de dependências (de fora para dentro).
 
-## Sintoma a evitar
+Esta skill documenta a estrutura canônica definitiva estabelecida pela consolidação arquitetural do `backend/` e da `engine/`.
 
-Uma pasta cujo nome descreve *como o código é escrito* (`infra`, `services`, `utils`, `handlers`) em vez de *o que
-o código faz* (`ingestion`, `knowledge-graph`, `changeset-lifecycle`). Esse padrão tende a: (1) virar um bucket que
-mistura domínios não relacionados (ex.: `infrastructure/` com `neo4j` e `ingestion` lado a lado, sem relação de
-negócio entre si); (2) duplicar-se por acidente (scaffolding morto ao lado da pasta `src/` real); (3) crescer sem
-fronteira clara de quem pode depender de quem.
+---
 
-## Regra
+## Princípios e Regras Fundamentais
 
-1. Pasta raiz ou pasta pai só existe se representar um **módulo de produto** ou um **domínio** dentro de um módulo.
-2. Uma pasta técnica (`infra`, `adapters`, `drivers`) só é aceitável **aninhada dentro do domínio que ela serve**,
-   nunca como pasta irmã genérica compartilhada por domínios não relacionados.
-3. Nomear pela camada arquitetural (ex.: regras de negócio vs. persistência/dependências externas), não pela
-   tecnologia (`neo4j-stuff`) nem pela capacidade isolada (`ingestion`, `knowledge-graph`) quando o que está em
-   jogo é essa fronteira técnica. Motivação: o acoplamento real hoje está entre capacidades e tecnologias — código
-   de regra de negócio importando driver de banco, SDK externo ou biblioteca de infraestrutura diretamente. Regras
-   de negócio só podem depender de persistência e de dependências/bibliotecas externas através de interfaces
-   (portas) definidas pela própria camada de negócio, nunca o inverso; nomear pela camada torna essa fronteira
-   visível na estrutura de pastas em vez de depender só de disciplina de import.
-4. Um "core" de domínio (ex.: `application`) nunca importa a pasta `infra` que fica dentro dele — a dependência
-   é sempre de fora para dentro (infra depende do core via portas/interfaces), nunca o inverso. Aninhar `infra`
-   dentro do domínio é uma decisão de **localização/coesão**, não uma licença para violar a direção de dependência
-   já fixada em `.harness/docs/architecture/dependency-rules.md`.
-5. Toda mudança de pasta que a Regra 4 acima implica é um "pacote de mudança": renomear pastas sem atualizar
-   `shared/architecture/module-boundaries.test.ts`, `.harness/docs/architecture/dependency-rules.md`, os
-   `workspaces` do `package.json` raiz e o `README.md` deixa a governança dessincronizada do código. Nenhuma
-   migração de pasta é considerada concluída sem esses quatro arquivos atualizados juntos.
-6. Scaffolding gerado antecipadamente (pasta criada "para depois") que fica vazia enquanto o código real mora em
-   `<mesmo-nível>/src/` é proibido. Se a pasta não tem arquivo, ela não existe.
+1. **Domínio sobre Técnica**: A raiz de qualquer subsistema organiza-se primariamente por domínios/capacidades de negócio (`combat`, `changeset`, `ingestion`, `simulation`, `verification`). Camadas técnicas (`infrastructure`, `provider`, `http`, `middleware`) existem para servir a esses domínios através de portas abstratas.
+2. **Direção de Dependência (Outside-In)**:
+   - **Regras de Negócio e Domínio** (`domain/entity`, `domain/repository`) são puras: zero dependências de bancos de dados, frameworks HTTP, drivers concretos ou relógios de sistema.
+   - **Serviços de Aplicação / Casos de Uso** (`service/`) orquestram a lógica através de interfaces (portas) definidas na camada de domínio.
+   - **Infraestrutura e Provedores** (`infrastructure/provider/`) implementam as portas de repositório e serviços externos. A infraestrutura depende do domínio; o domínio **nunca** depende da infraestrutura.
+3. **Padrão de Camadas de Domínio (`src/modules/<domain>/`)**:
+   - `<domain>/domain/entity/`: Entidades puras, types, value objects, schemas de domínio (Zod).
+   - `<domain>/domain/repository/`: Portas abstratas / interfaces (ex.: `simulation-port.ts`, `mechanical-gate-port.ts`, `changeset-repository.ts`).
+   - `<domain>/service/`: Casos de uso e serviços de aplicação (ex.: `verify-combat.ts`, `simulate-combat.ts`, `chat-orchestrator.ts`).
+   - `<domain>/controller/`: Adaptadores primários HTTP / controllers de entrada que orquestram requisições daquele domínio.
+4. **Isolamento de Drivers e Persistência**:
+   - Código dentro de `src/modules/` **nunca** importa drivers concretos (`neo4j-driver`, `pg`, `postgres`, `mysql`, `sqlite3`, `typeorm`, `prisma`).
+   - Persistência e consultas externas residem estritamente em `src/infrastructure/provider/`.
+5. **Zero Scaffolding Fantasma**: Proibida a criação de pastas vazias ou scaffolding antecipado sem código real.
+6. **Proibição de Links Simbólicos**: Zero symlinks arquiteturais no repositório.
+7. **Isolamento do Harness / Runtime**: Código de produto de runtime (`backend`, `engine`, `frontend`, `mcp`, `shared`) **nunca** importa `.agents/` ou `.harness/`.
+8. **Pacote de Governança Atômico**: Qualquer alteração de fronteira de pastas exige atualização conjunta de `shared/architecture/module-boundaries.test.ts`, documentação de arquitetura, FICs relevantes e suites de teste.
 
-## Raiz do repositório
+---
 
-Only estes sete nomes são módulos de produto ou infraestrutura de agentes/governança — nada mais:
+## 1. Raiz do Repositório
+
+Apenas estes 7 módulos canônicos são permitidos na raiz do projeto (validado por `shared/architecture/module-boundaries.test.ts` - 17.1 / 27.1):
 
 ```text
-.agents/      # operação de agentes, nunca importado por runtime
-.harness/     # governança canônica (specs, rules, skills), nunca importado por runtime
-backend/
-engine/
-frontend/
-mcp/
-shared/       # cross-cutting genuinamente compartilhado por 2+ módulos de produto
+combat-designer/
+├── .agents/       # Governança de agentes, manifestos, templates e validadores FIC (nunca importado em runtime)
+├── .harness/      # Especificações (specs), regras (rules), skills, FICs e documentação canônica
+├── backend/       # Aplicação TypeScript consolidada (@combat-designer/backend)
+├── engine/        # Crate nativa Rust pura e determinística (combat-engine)
+├── frontend/      # Aplicação web e Workbench interativo Next.js/React (@combat-designer/frontend)
+├── mcp/           # Model Context Protocol Gateway e Server (@combat-designer/mcp)
+└── shared/        # Verificadores de fronteira arquitetural e testes de invariantes estruturais
 ```
 
-`shared/` só recebe algo que **hoje** é consumido por 2+ módulos de produto — decisão orientada por evidência de uso
-(grep de import), não por expectativa futura. Regra de posicionamento para qualquer pasta que não seja um módulo
-direto (`backend`/`frontend`/`engine`/`mcp`): se só um módulo consome, ela mora dentro desse módulo; se dois ou
-mais módulos consomem, ela vai para `shared/`. Nunca uma pasta utilitária solta — sempre dentro do domínio/módulo
-real que a usa.
+Pastas proibidas na raiz (17.2 / 27.2): `packages`, `crates`, `infrastructure`, `scripts`, `tests`, `fixtures`, `exporters`, `target`, `data`, `docs`, `specs`, `rules`, `regras`, `skills`, `.docs`, `.specs`, `.rules`, `.skills`.
 
-Aplicando essa regra a `observability/`: hoje só `backend/api` importa `@combat-designer/observability` (confirmado
-por grep no repositório inteiro) — nem `mcp/` nem `frontend/` importam esse pacote. Sem evidência de consumo
-compartilhado, `observability/` não vai para `shared/`; vai para dentro de `backend/`, como parte da camada
-`infrastructure/` daquele módulo (ver seção `backend/` abaixo). Se `mcp/` ou `frontend/` passarem a emitir
-telemetria por esse pacote no futuro, essa decisão deve ser revisitada — não antes.
+---
+
+## 2. `backend/` — Pacote Consolidado `@combat-designer/backend`
+
+O backend é unificado em um **único pacote npm** (`@combat-designer/backend`), eliminando a fragmentação de múltiplos `package.json` internos e centralizando o código estritamente sob `backend/src/`.
+
+### 2.1 Estrutura de Diretórios
+
+```text
+backend/
+├── package.json                          # @combat-designer/backend
+├── tsconfig.json
+├── Dockerfile
+├── src/
+│   ├── main.ts                           # Ponto de entrada / bootstrap do servidor
+│   ├── routes/                           # Registro e mapeamento declarativo de rotas HTTP
+│   │   └── index.ts
+│   │
+│   ├── modules/                          # Domínios de negócio segregados
+│   │   ├── combat/                       # Domínio de combate e verificação mecânica
+│   │   │   ├── controller/               # combat.controller.ts
+│   │   │   ├── service/                  # verify-combat.ts, simulate-combat.ts
+│   │   │   └── domain/
+│   │   │       ├── entity/               # combat.types.ts, verification.types.ts
+│   │   │       └── repository/           # simulation-port.ts, mechanical-gate-port.ts
+│   │   ├── changeset/                    # Domínio de ChangeSets e auditoria
+│   │   │   ├── controller/               # changeset.controller.ts
+│   │   │   ├── service/                  # propose-changeset.ts, approve-changeset.ts, ...
+│   │   │   └── domain/
+│   │   │       ├── entity/               # changeset.types.ts
+│   │   │       └── repository/           # changeset-repository.ts
+│   │   ├── ingestion/                    # Domínio de ingestão de assets
+│   │   │   └── domain/
+│   │   │       └── entity/               # ingestion.types.ts, manifest.types.ts
+│   │   ├── workspace/                    # Domínio de workspaces e isolamento multi-tenant
+│   │   │   ├── service/                  # workspace.service.ts
+│   │   │   └── domain/
+│   │   │       ├── entity/               # workspace.types.ts
+│   │   │       └── repository/           # workspace-repository.ts
+│   │   ├── llm/                          # Orquestração de LLM e function calling
+│   │   │   ├── service/                  # chat-orchestrator.ts, combat-tool-declarations.ts
+│   │   │   └── domain/
+│   │   │       └── port/                 # llm-provider.ts (porta abstrata)
+│   │   ├── fic/                          # Validação e auditoria de Feature Impact Contracts
+│   │   │   ├── service/                  # fic.service.ts
+│   │   │   └── domain/
+│   │   │       └── entity/               # fic.types.ts, validator.ts
+│   │   ├── observability/                # Domínio de telemetria e integridade operacional
+│   │   │   ├── service/                  # telemetry.service.ts
+│   │   │   └── domain/
+│   │   │       ├── entity/               # telemetry.types.ts
+│   │   │       └── repository/           # telemetry-port.ts
+│   │   └── mcp/                          # Contratos e tipos compartilhados com MCP
+│   │       └── domain/
+│   │           └── entity/               # mcp.types.ts
+│   │
+│   └── infrastructure/                   # Camada técnica e adaptadores concretos
+│       ├── http/                         # Servidor HTTP (node:http), workbench-html, CORS
+│       │   ├── server.ts
+│       │   └── workbench-html.ts
+│       ├── middleware/                   # Middlewares (auth, tenant isolation, rate limit, error)
+│       │   ├── auth.middleware.ts
+│       │   ├── error.middleware.ts
+│       │   └── workspace.middleware.ts
+│       └── provider/                     # Adaptadores concretos das portas de domínio
+│           ├── ingestion/                # Pipeline de ingestão, normalizer, cache, limits
+│           │   ├── pipeline.ts
+│           │   ├── normalizer.ts
+│           │   ├── version-check.ts
+│           │   ├── limits.ts
+│           │   ├── envelope.ts
+│           │   ├── cache.ts
+│           │   ├── parsers/              # Parsers específicos (Unity, Unreal, Godot)
+│           │   ├── exporters/            # Scripts de exportação entregues às engines
+│           │   └── fixtures/             # Bundles de teste e validação
+│           ├── knowledge-graph/          # Adaptador Neo4j (@combat-designer/graph-adapter)
+│           │   ├── client/               # Conexão e driver Neo4j isolado
+│           │   ├── projector/            # Projeção canônica em grafo
+│           │   ├── queries/              # Consultas Cypher
+│           │   ├── schema/               # Índices e constraints
+│           │   └── adapter.ts
+│           ├── llm/                      # Adaptadores concretos de LLM
+│           │   └── gemini-provider.ts    # Implementação via @google/genai SDK
+│           └── observability/            # Adaptadores de métricas, tracing e logging
+│               ├── otel/                 # OpenTelemetry SDK
+│               ├── metrics/              # Métricas Prometheus
+│               ├── tracing/              # Traces OTLP
+│               ├── logging/              # Pino logger estruturado
+│               ├── health/               # Probes de liveness e readiness
+│               ├── dashboards/           # Definições JSON de dashboards Grafana
+│               └── grafana/              # Provisionamento Grafana
+└── tests/
+    ├── unit/                             # Testes unitários por camada de domínio
+    ├── integration/                      # Testes de integração de API, ingestão e grafo
+    └── fixtures/                         # Cargas estáticas de teste
+```
+
+### 2.2 Regras Estritas de Dependência do Backend
+- `src/modules/*/domain` tem **zero** imports de `src/infrastructure` ou de pacotes de banco/driver.
+- `src/modules/*/service` depende apenas de `src/modules/*/domain`.
+- `src/infrastructure/provider/*` implementa as interfaces definidas em `src/modules/*/domain/repository`.
+- `src/infrastructure/http/server.ts` recebe implementações de portas via injeção de dependência na inicialização.
+
+---
+
+## 3. `engine/` — Crate Única Nativa Rust `combat-engine`
+
+A engine foi consolidada em uma **única crate Rust** (`combat-engine` em `engine/Cargo.toml`), eliminando a fragmentação de crates dispersas e subpastas `src/` redundantes. Todo o código reside sob `engine/src/`, estruturado em três submódulos estritamente isolados:
+
+### 3.1 Estrutura de Diretórios
+
+```text
+engine/
+├── Cargo.toml                            # [package] name = "combat-engine"
+├── Dockerfile
+├── src/
+│   ├── lib.rs                            # Exportação pública dos módulos: domain, simulation, verification
+│   │
+│   ├── domain/                           # Núcleo Canônico Puro (Canonical Domain Model)
+│   │   ├── mod.rs
+│   │   ├── attack.rs                     # Entidade Attack, dados de frame e hitboxes
+│   │   ├── hitbox.rs                     # Formas geométricas discretas e damage specs
+│   │   ├── frame.rs                      # Janelas temporais em inteiros (FrameWindow)
+│   │   ├── cancel.rs                     # Regras de cancelamento (CancelRule, CancelCondition)
+│   │   ├── resource.rs                   # Custos e geração de recursos (ResourceCost)
+│   │   ├── state.rs                      # Estados do ator (CombatState, StunType)
+│   │   ├── archetype.rs                  # Arquétipos de personagens
+│   │   ├── identity.rs                   # AttackId, CharacterId, WorkspaceId
+│   │   ├── provenance.rs                 # Rastreabilidade de origem de dados (Provenance)
+│   │   ├── trust.rs                      # Níveis de confiança (Untrusted, Verified, etc.)
+│   │   └── error.rs                      # Erros de invariantes de domínio (DomainError)
+│   │
+│   ├── simulation/                       # Simulador Determinístico Temporal ("WHAT HAPPENS?")
+│   │   ├── mod.rs
+│   │   ├── engine.rs                     # CombatSimulator — loop temporal determinístico
+│   │   ├── clock.rs                      # FrameClock discreto monotônico (u32/u64)
+│   │   ├── budget.rs                     # ExecutionBudget & BudgetTracker (limites de frames/eventos)
+│   │   ├── events.rs                     # EventLog ordenado determinístico (SimulationEvent)
+│   │   ├── metrics.rs                    # Métricas mecânicas computadas (DPS, burst, juggle)
+│   │   ├── replay.rs                     # Execução e validação de replays idênticos
+│   │   ├── order.rs                      # Resolução determinística de empates e prioridades
+│   │   ├── sha256.rs                     # Cálculo canônico de StateHash
+│   │   ├── snapshot.rs                   # Snapshots intermediários do estado de combate
+│   │   └── model.rs                      # DTOs de entrada e saída de simulação
+│   │
+│   ├── verification/                     # Mechanical Gate ("IS IT MECHANICALLY SAFE?")
+│   │   ├── mod.rs
+│   │   ├── verifier.rs                   # MechanicalVerifier::verify
+│   │   ├── profile.rs                    # Perfis: strict, fast, research
+│   │   ├── verdict.rs                    # GateVerdict: Pass, Fail, Blocked, Stale, BudgetExceeded, Error
+│   │   ├── budget.rs                     # VerificationBudgetTracker (proteção contra explosão combinatória)
+│   │   ├── violations.rs                 # ViolationCode e ViolationSeverity
+│   │   ├── evidence.rs                   # EvidenceRecord com ordenação canônica determinística
+│   │   ├── stale.rs                      # StaleProtection — validação da 7-tupla canônica
+│   │   ├── hash.rs                       # gate_result_hash canônico SHA-256
+│   │   └── rules/                        # Implementação das regras G01–G11 e Counterplay
+│   │       ├── mod.rs
+│   │       ├── simulation_integrity.rs   # G01: integridade e StateHash
+│   │       ├── infinite_loop.rs          # G02: detecção de ciclos infinitos
+│   │       ├── stun_lock.rs              # G03: janela de reação mínima contra stun-lock
+│   │       ├── resource_safety.rs        # G04: consumo e regeneração de recursos
+│   │       ├── max_sustained_dps.rs      # G05: janela deslizante de DPS (60fps normalizado)
+│   │       ├── max_burst.rs              # G06: teto de dano contíguo imediato
+│   │       ├── max_juggle.rs             # G07: teto de tempo contínuo airborne/juggle
+│   │       ├── cancel_validity.rs        # G08: execução estrita dentro da janela de cancel
+│   │       ├── provenance_required.rs    # G09: exigência de proveniência verificável
+│   │       ├── zero_risk_attack.rs       # G10: ataque invulnerável sem recuperação
+│   │       ├── guard_integrity.rs        # G11: opções de escape antes da quebra de guarda
+│   │       └── counterplay.rs            # Regra de contra-ataque acionável
+│   │
+│   └── bin/
+│       └── server.rs                     # Servidor nativo da engine (comunicação TCP/HTTP)
+└── tests/                                # Suíte completa de testes de isolamento e propriedades
+    ├── domain_invariant_tests.rs
+    ├── domain_property_tests.rs
+    ├── domain_determinism_tests.rs
+    ├── domain_cross_engine_equivalence_tests.rs
+    ├── domain_architecture_isolation_test.rs
+    ├── simulation_tests.rs
+    ├── simulation_property_tests.rs
+    ├── simulation_budget_tests.rs
+    ├── simulation_determinism_tests.rs
+    ├── simulation_architecture_isolation_test.rs
+    ├── verification_verifier_tests.rs
+    ├── verification_property_tests.rs
+    ├── verification_security_tests.rs
+    └── verification_architecture_isolation_test.rs
+```
+
+### 3.2 Invariantes Arquiteturais da Engine
+- **Hierarquia Interna**:
+  - `domain` tem **zero** dependências de `simulation` e `verification`.
+  - `simulation` depende apenas de `domain`.
+  - `verification` avalia os fatos gerados por `simulation` contra os invariantes de `domain`.
+- **Pureza Numérica Discreta**: Proibido o uso de números de ponto flutuante (`f32`, `f64`) na lógica mecânica de física, colisão, dano, frames ou verificação. Todos os cálculos usam estritamente inteiros (`u32`, `u64`, `i32`).
+- **Zero Wall-Clock**: Proibido o uso de `std::time::{Instant, SystemTime}`. O tempo temporal é governado exclusivamente pelo `FrameClock` discreto.
+- **Isolamento de Dependências**: O `Cargo.toml` da engine não pode depender de `tokio`, `neo4j`, `postgres`, frameworks web ou pacotes de observabilidade de terceiros.
+
+---
+
+## 4. `frontend/` — Arquitetura Orientada a Features (Feature-Sliced)
+
+O frontend adota organização por capacidades/features de produto, eliminando o anti-padrão de pastas técnicas horizontais no nível de raiz (`hooks/`, `services/`, `state/` soltos na raiz):
+
+```text
+frontend/
+├── app/                                  # Roteamento e layout (Next.js App Router)
+│   ├── page.ts                           # Ponto de composição de features
+│   └── server.ts                         # Servidor HTTP de entrega do frontend
+├── features/                             # Domínios de interface do usuário
+│   ├── combat-explorer/                  # Exploração e visualização de ataques/cancels
+│   │   ├── components/                   # CombatExplorer.ts, HitboxViewer, FrameTimeline
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   ├── state/
+│   │   └── types/
+│   ├── changeset-review/                 # Revisão e aprovação de ChangeSets com Gate verdicts
+│   │   ├── components/                   # ChangeSetReview.ts, VerdictBadge, DiffViewer
+│   │   └── types/
+│   ├── director-chat/                    # Painel de conversação do Combat Director com LLM
+│   │   ├── components/                   # DirectorChat.ts, ToolCallHistory, PromptEnvelope
+│   │   └── types/
+│   ├── simulation-workbench/             # Bancada de simulação interativa e execução
+│   │   ├── components/                   # SimulationWorkbench.ts
+│   │   └── types/
+│   └── catalog/                          # Catálogo de ataques e cenários do workspace
+│       ├── components/                   # CatalogList.ts
+│       └── types/
+├── shared/                               # Componentes e serviços reusados por 2+ features
+│   └── services/                         # api-client.ts (comunicação REST tipada com backend)
+└── tests/                                # Testes de renderização e lógica de frontend
+```
+
+**Regras do Frontend**:
+- Proibido importar drivers de banco de dados (`pg`, `neo4j-driver`).
+- Proibido importar infraestrutura de observabilidade (`@opentelemetry`, `prometheus`, etc.).
+- Proibido importar módulos internos do Rust (`CombatSimulator`, `MechanicalVerifier`).
+- Comunicação com o backend é realizada exclusivamente através do `api-client.ts` via HTTP/REST.
+
+---
+
+## 5. `mcp/` — Model Context Protocol Gateway & Server
+
+O subsistema MCP separa estritamente a fronteira de autorização da exposição de ferramentas:
+
+```text
+mcp/
+├── package.json                          # @combat-designer/mcp
+├── gateway/                              # Fronteira de Segurança e Autorização ("CAN I?")
+│   └── src/
+│       ├── auth/                         # Resolução de principal, validação de tokens
+│       ├── policy/                       # Políticas de acesso e restrições por role
+│       ├── workspace/                    # Isolamento e autorização estrita de workspace
+│       ├── routing/                      # Roteamento de tool calls seguras
+│       └── audit/                        # Registro de auditoria de chamadas MCP
+└── server/                               # Servidor de Ferramentas e Tradução ("TRANSLATE")
+    └── src/
+        ├── main.ts                       # Ponto de entrada HTTP/SSE do servidor MCP
+        ├── tools/                        # Schemas e definições formais das ferramentas
+        ├── handlers/                     # Manipuladores de ferramentas (delegação ao backend)
+        └── orchestration/                # Orquestração e envelope de contexto
+```
+
+**Regras do MCP**:
+- O Gateway nunca contém regras mecânicas de combate nem simulação física.
+- O Server nunca escreve diretamente em bancos de dados nem altera assets; delega chamadas via HTTP/portas ao backend.
+- O MCP nunca importa ou depende do `frontend/`.
+
+---
+
+## 6. `shared/` — Fronteiras e Invariantes Cross-Cutting
+
+O diretório `shared/` abriga exclusivamente código e testes de verificação arquitetural que inspecionam o repositório como um todo:
 
 ```text
 shared/
-└── architecture/        # já existente — verificadores de fronteira; único conteúdo hoje, por não haver
-                          # nenhuma outra pasta com evidência de consumo por 2+ módulos
+└── architecture/
+    └── module-boundaries.test.ts        # Suite formal de 16 testes de integridade estrutural
 ```
 
-Como o pacote não muda de dono (continua só do backend), o nome `@combat-designer/observability` **não precisa
-ser renomeado** — só o caminho muda. Isso simplifica a lista de consequências: `RULE 5` de
-`module-boundaries.test.ts` (frontend não pode importar `@combat-designer/observability`) não precisa de nenhuma
-edição, porque o nome do pacote continua o mesmo independente de onde ele mora fisicamente.
+---
 
-Consequência obrigatória mesmo assim: `observability/` sai da raiz, então o `allowed` set do teste `17.1 / 27.1`
-perde a entrada `observability` (o teste já não vai encontrá-la lá — ela passa a existir só dentro de `backend/`);
-a entry em `workspaces` no `package.json` raiz vira `backend/application/infrastructure/*` (ver seção `backend/`);
-e `RULE 10` (`observability/ cannot depend on frontend/`) tem o path atualizado para
-`backend/application/infrastructure/observability/`.
+## Checklist de Conformidade Arquitetural (Spec Compliance Gate)
 
-## `backend/`
+Antes de considerar concluída qualquer alteração de código ou documentação, verifique:
 
-Estado atual: quatro pastas irmãs (`api`, `application`, `contracts`, `infrastructure`) — `infrastructure` é uma
-pasta técnica genérica que hoje mistura dois domínios sem relação direta (`ingestion` e `neo4j`), e `api` é uma
-camada (bootstrap HTTP) tratada como se fosse um domínio.
-
-Alvo: dois pacotes de topo. `contracts/` inalterado. Dentro de `application/`, a fronteira estrutural que importa
-é `src/` (regras de negócio: use-cases + ports, zero dependência concreta) vs. `infrastructure/` (tudo que toca
-banco, framework HTTP/middlewares, SDK externo ou telemetria) — uma única camada técnica nomeada, não uma pasta
-de raiz do repositório nem uma bucket compartilhada entre domínios não relacionados na raiz: ela existe porque
-todo o seu conteúdo serve exclusivamente o `backend`.
-
-```text
-backend/
-├── contracts/                       # inalterado — já é organizado por domínio internamente
-│   └── src/{fic,ingestion,mcp,observability,simulation,verification}/
-└── application/
-    ├── src/                         # core: use-cases + ports, zero dependência concreta (Rule 3 continua valendo)
-    │   ├── use-cases/               # approve/apply/propose/withdraw-changeset, verify-combat, simulate-combat, ...
-    │   └── ports/                   # simulation-port, mechanical-gate-port, combat-query-port, ...
-    └── infrastructure/              # camada técnica única do backend: persistência, deps externas, middlewares
-        ├── http/                    # ex-`backend/api` — bootstrap HTTP (node:http hoje, ver nota abaixo)
-        │   └── src/{index.ts,server.ts}
-        ├── ingestion/               # ex-`backend/infrastructure/ingestion`
-        │   └── src/{pipeline.ts,normalizer.ts,cache.ts,limits.ts,version-check.ts,parsers/,exporters/,fixtures/}
-        ├── knowledge-graph/         # ex-`backend/infrastructure/neo4j` — pacote @combat-designer/graph-adapter,
-        │   │                        # nome mantido (caminho de pasta ≠ nome de pacote é aceitável, como já
-        │   │                        # acontece hoje com `ingestion`/@combat-designer/ingestion)
-        │   └── src/{client/,projector/,queries/,schema/,status/,adapter.ts}
-        └── observability/           # ex-`observability/` (raiz) — só o backend consome hoje, ver "Raiz do repositório"
-            └── src/{tracing,metrics,logging,health,adapters}/
-```
-
-Cada subpasta de `infrastructure/` continua sendo seu próprio pacote npm (`package.json` próprio) para manter
-granularidade de build e teste — a consolidação é de **localização/agrupamento visual**, não uma fusão de pacotes
-em um único `dist`. `backend/application/src` continua sem poder importar `neo4j-driver`/`pg`/framework HTTP
-(RULE 3 do checker permanece válida apontando exatamente para esse path); é `infrastructure/*` que depende do
-core via as portas que ele expõe, nunca o inverso.
-
-Nota sobre `http/`: o bootstrap hoje usa `node:http` puro, não Fastify — apesar da "Decisão de stack" no `README.md`
-dizer "API/orquestração: TypeScript + Fastify". É uma divergência pré-existente entre documentação e código,
-fora do escopo desta migração estrutural (comportamento, não estrutura), mas deve ficar registrada, não escondida
-atrás do nome da pasta. `backend/api/package.json` também declara `@combat-designer/application` como dependência
-sem nunca importá-la em `server.ts` — dependência morta pré-existente, também fora de escopo aqui.
-
-Consequência obrigatória: `dependency-rules.md` — a linha "Infrastructure" passa a apontar para
-`backend/application/infrastructure/*` como uma única linha (a matriz de dependências permitidas/proibidas já era
-a mesma para `ingestion` e `neo4j`; não há razão para duplicá-la em quatro linhas agora que os quatro moram sob o
-mesmo nome de camada). O teste `17.5` troca os paths hardcoded de `backend/infrastructure/*` para
-`backend/application/infrastructure/{ingestion,knowledge-graph}/*`. Os `workspaces` no `package.json` raiz trocam
-`backend/infrastructure/*` por `backend/application/infrastructure/*` (não `backend/application/*` — `application/`
-em si já é pego pelo glob `backend/*`, e `infrastructure/` não tem `package.json` próprio, é só uma pasta de
-agrupamento). `tsconfig.json` `references` ganha uma entrada por pacote sob `infrastructure/`. Depois de qualquer
-rename de pacote, rodar `npm install` na raiz para regenerar `package-lock.json` — sem isso `npm ci` quebra.
-
-## `mcp/`
-
-`gateway/` e `server/` já eram organizados por domínio dentro de `src/` (`auth`, `policy`, `workspace`, `routing`,
-`orchestration`, `tools`...). O único problema encontrado era scaffolding morto: pastas de topo vazias com o mesmo
-nome de subpastas dentro de `src/` (`mcp/gateway/auth/` vazia ao lado de `mcp/gateway/src/auth/` com código real).
-Isso já foi removido como limpeza direta desta auditoria — nenhuma mudança estrutural adicional é necessária aqui.
-Regra a manter daqui em diante: um domínio só existe uma vez por pacote; se `src/<domínio>` existe, não cria-se
-`<domínio>/` irmão de `src/`.
-
-## `frontend/`
-
-Hoje vazio (apenas scaffolding: `app`, `components`, `features`, `hooks`, `services`, `state`, `types`, `tests`),
-mas já nasce com o anti-padrão clássico de front-end: pastas horizontais por *tipo de arquivo* (`hooks/`, `services/`,
-`state/`) compartilhadas por toda a aplicação em vez de por domínio. Como ainda não há código, a correção é gratuita
-— não há migração, só adotar a estrutura correta desde o primeiro arquivo:
-
-```text
-frontend/
-├── app/                    # roteamento/composição — não é domínio, é ponto de entrada; mantido por convenção Next.js
-├── features/
-│   ├── combat-explorer/    # ex.: browsing de attacks/hitboxes/cancels
-│   │   └── {components,hooks,services,state,types}/
-│   ├── changeset-review/   # propose/approve/apply/withdraw + gate report
-│   │   └── {components,hooks,services,state,types}/
-│   ├── director-chat/      # painel de chat com o LLM (MCP)
-│   │   └── {components,hooks,services,state,types}/
-│   └── project-workspace/  # upload de bundle, status de ingestão, workspace switching
-│       └── {components,hooks,services,state,types}/
-├── shared/                 # apenas o que 2+ features realmente reusam: design tokens, primitives de UI, client MCP
-│   └── {components,hooks,services,state,types}/
-└── tests/
-```
-
-Dentro de cada `features/<feature>/`, `hooks`/`services`/`state`/`types` deixam de ser pastas de raiz do frontend e
-passam a ser subpastas locais ao domínio que as usa — a mesma regra recursiva da seção "Regra" acima. `frontend/shared`
-só recebe algo quando um segundo feature precisar do mesmo código; nada entra lá por padrão ou "para o caso de".
-
-## Checklist para aplicar a um novo módulo
-
-- [ ] O nome da pasta descreve um domínio/capacidade, não uma camada (`services`, `utils`) nem uma tecnologia (`neo4j-stuff`)?
-- [ ] Se existe uma pasta técnica (`infra`, `adapters`), ela está aninhada dentro do domínio que serve, e não é irmã de domínios não relacionados?
-- [ ] A direção de dependência declarada em `dependency-rules.md` continua verdadeira após a mudança?
-- [ ] `module-boundaries.test.ts`, `dependency-rules.md`, `package.json#workspaces`/`tsconfig#references` e `README.md` foram atualizados no mesmo commit?
-- [ ] Nenhuma pasta vazia sobrevive ao lado de um `src/` com o mesmo nome de subpasta?
+- [ ] **Raiz Limpa**: Apenas os 7 diretórios canônicos existem na raiz do projeto (`.agents`, `.harness`, `backend`, `engine`, `frontend`, `mcp`, `shared`).
+- [ ] **Localização no Backend**: Todo novo arquivo do backend reside sob `backend/src/modules/<domain>/` ou `backend/src/infrastructure/`.
+- [ ] **Pureza do Domínio do Backend**: Nenhum arquivo em `backend/src/modules/` importa drivers concretos (`neo4j-driver`, `pg`, etc.).
+- [ ] **Localização na Engine**: Todo novo arquivo da engine reside sob `engine/src/domain/`, `engine/src/simulation/` ou `engine/src/verification/`.
+- [ ] **Pureza Mecânica da Engine**: Zero números de ponto flutuante (`f32`/`f64`) e zero relógio de parede (`Instant`/`SystemTime`) na lógica mecânica.
+- [ ] **Isolamento de Runtime**: Nenhum código de produto importa `.agents/` ou `.harness/`.
+- [ ] **Testes de Arquitetura Verificados**: O comando `vitest run shared/architecture/module-boundaries.test.ts` passa com 100% de sucesso.
+- [ ] **Rastreabilidade FIC**: Toda adição ou mudança de fronteira possui FIC correspondente e validado via `npm run validate-fic`.

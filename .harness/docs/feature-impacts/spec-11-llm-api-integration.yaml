@@ -1,0 +1,125 @@
+feature_id: llm-api-integration-001
+title: LLM API Integration for Chat Orchestration
+owner: Implementation Agent
+status: verified
+intent: Replace deterministic mock in POST /chat with real Gemini API LLM integration using function calling, enabling the Combat Director to dynamically select and execute combat tools (search, simulate, verify, propose) based on user prompts.
+non_goals:
+  - No direct LLM access from frontend (all calls go through backend).
+  - No LLM-fabricated Gate verdicts — Mechanical Gate remains sole authority.
+  - No LLM approval or application of ChangeSets — human approval strictly required.
+  - No persistent conversation history on backend — each POST is stateless.
+domain_owner: infrastructure
+
+approval:
+  gate_run_id: gate_run_spec11_llm_001
+  gate_rule_set_version: "1.0.0"
+  model_revision: "rev-1"
+  approved_by: "human_lead"
+  approved_at: "2026-09-10T00:17:00Z"
+  approval_evidence: "Unit tests, integration tests with mock LLM provider, backward compatibility validation, FIC schema validation all passing."
+
+contracts:
+  - name: llm-provider-port
+    version: v1
+    change: additive
+  - name: chat-orchestrator-service
+    version: v1
+    change: additive
+  - name: gemini-provider-adapter
+    version: v1
+    change: additive
+
+categories:
+  - infrastructure
+  - api
+  - gateway
+  - security
+
+data_sources:
+  - backend-http-api
+  - gemini-api
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected:
+    - EXECUTION_BUDGET
+    - NO_INFINITE_LOOP
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected:
+    - llm
+  workspace_rules_changed:
+    - "LLM tool calls scoped strictly to workspace_id from context envelope"
+
+security:
+  threats_addressed:
+    - "LLM fabrication of Mechanical Gate verdicts"
+    - "LLM self-approval of ChangeSets"
+    - "Infinite function calling loops causing resource exhaustion"
+    - "Cross-workspace data leakage through LLM context"
+  invariants_affected:
+    - "Mechanical Gate PASS is sole authority — LLM cannot override"
+    - "MAX_TOOL_CALL_ROUNDS limits function calling loops to 5"
+    - "untrusted_text tags preserved in all tool call results"
+    - "LlmProvider errors result in HTTP 503 with graceful fallback"
+
+audit:
+  events_added:
+    - "llm_chat_turn"
+    - "llm_tool_call_executed"
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added: []
+  endpoints_changed:
+    - "POST /api/workspaces/:workspace_id/chat — now routes through ChatOrchestrator when LlmProvider available"
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - backend/tests/unit/llm/chat-orchestrator.test.ts
+  integration:
+    - backend/tests/integration/api/llm-integration.test.ts
+  property: []
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - "llm_chat_turn_count"
+    - "llm_tool_call_count"
+    - "llm_tool_call_round_count"
+  traces:
+    - "http_post_api_workspaces_chat_llm"
+  logs:
+    - "llm_provider_error"
+
+rollback: Remove LlmProvider injection from ApiServerConfig, ChatOrchestrator falls back to deterministic mock.
+risks: Gemini API latency and cost per chat turn; mitigated by MAX_TOOL_CALL_ROUNDS limit, graceful fallback to mock, and model selection (gemini-3.7-flash for cost efficiency).

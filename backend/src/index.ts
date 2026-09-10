@@ -23,6 +23,37 @@ export * from "./modules/observability/domain/repository/index.js";
 // Workspace Domain
 export * from "./modules/workspace/index.js";
 
+// Auth Domain (Spec 12)
+export {
+  UserSchema,
+  type User,
+  UserPublicSchema,
+  type UserPublic,
+  WorkspaceMembershipSchema,
+  type WorkspaceMembership,
+  RefreshTokenSchema,
+  type RefreshToken,
+  type WorkspaceClaim,
+  type AccessTokenClaims,
+  type AuthTokens,
+  type UserRepositoryPort,
+  type WorkspaceMembershipRepositoryPort,
+  type RefreshTokenRepositoryPort,
+  hashPassword,
+  verifyPassword,
+  TokenService,
+  DEFAULT_JWT_SECRET,
+  DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+  DEFAULT_REFRESH_TOKEN_TTL_DAYS,
+  AuthService,
+  type RegisterInput,
+  type LoginInput,
+  AuthController,
+} from "./modules/auth/index.js";
+
+// Infrastructure Middleware
+export * from "./infrastructure/middleware/index.js";
+
 // Infrastructure Providers
 export * from "./infrastructure/provider/ingestion/index.js";
 export {
@@ -53,6 +84,7 @@ export {
   DefaultGraphAdapter,
 } from "./infrastructure/provider/knowledge-graph/index.js";
 export * from "./infrastructure/provider/observability/index.js";
+export * from "./infrastructure/provider/auth/in-memory-auth-repository.js";
 
 // Infrastructure HTTP
 export * from "./infrastructure/http/server.js";

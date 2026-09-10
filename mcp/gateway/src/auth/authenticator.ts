@@ -1,20 +1,69 @@
 import type { Principal } from "@combat-designer/backend";
-import { PrincipalSchema, McpError } from "@combat-designer/backend";
+import { PrincipalSchema, McpError, TokenService } from "@combat-designer/backend";
 
 export class GatewayAuthenticator {
-  authenticate(principalCandidate: unknown): Principal {
-    if (!principalCandidate) {
-      throw new McpError("UNAUTHENTICATED", "Authentication required: principal context is missing.");
+  private readonly tokenService: TokenService;
+
+  constructor(tokenService: TokenService = new TokenService()) {
+    this.tokenService = tokenService;
+  }
+
+  authenticate(candidate: unknown): Principal {
+    if (!candidate) {
+      throw new McpError("UNAUTHENTICATED", "Authentication required: principal context or token is missing.");
     }
 
-    const parseResult = PrincipalSchema.safeParse(principalCandidate);
+    // 1. If candidate is a token string (or Bearer string)
+    if (typeof candidate === "string") {
+      const token = candidate.startsWith("Bearer ") ? candidate.slice(7).trim() : candidate.trim();
+      return this.derivePrincipalFromToken(token);
+    }
+
+    // 2. If candidate is an object with token property
+    if (typeof candidate === "object" && candidate !== null && "token" in candidate) {
+      const rawToken = (candidate as { token: unknown }).token;
+      if (typeof rawToken === "string") {
+        const token = rawToken.startsWith("Bearer ") ? rawToken.slice(7).trim() : rawToken.trim();
+        return this.derivePrincipalFromToken(token);
+      }
+    }
+
+    // 3. If candidate is a direct Principal object (validated via schema)
+    const parseResult = PrincipalSchema.safeParse(candidate);
     if (!parseResult.success) {
       throw new McpError(
         "UNAUTHENTICATED",
-        `Invalid principal structure: ${parseResult.error.message}`
+        `Invalid principal structure or token: ${parseResult.error.message}`
       );
     }
 
     return parseResult.data;
+  }
+
+  public derivePrincipalFromToken(token: string): Principal {
+    try {
+      const claims = this.tokenService.verifyAccessToken(token);
+      const workspaces = claims.workspaces.map((w) => w.workspace_id);
+      return {
+        principal_id: claims.sub,
+        principal_type: "human",
+        capabilities: [
+          "combat:read",
+          "combat:query",
+          "combat:simulate",
+          "combat:verify",
+          "combat:propose",
+          "changeset:withdraw",
+          "changeset:approve",
+          "changeset:apply",
+        ],
+        authorized_workspaces: workspaces.length > 0 ? workspaces : ["ws-default"],
+      };
+    } catch (err: any) {
+      throw new McpError(
+        "UNAUTHENTICATED",
+        `Token verification failed: ${err.message || "Invalid or expired access token"}`
+      );
+    }
   }
 }

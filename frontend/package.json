@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "start": "node --experimental-strip-types app/server.ts",
+    "dev": "node --experimental-strip-types app/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

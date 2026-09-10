@@ -1,0 +1,135 @@
+feature_id: frontend-application-001
+title: Frontend Application and LLM Input Integration
+owner: Implementation Agent
+status: verified
+intent: Deliver multi-page frontend application (Combat Explorer, Attack Catalog, Simulation & Gate Workbench, ChangeSet Review) consuming backend REST routes, and construct structured LLM input context envelope for backend Director Chat orchestration.
+non_goals:
+  - No direct client-side database connections (Postgres, Neo4j).
+  - No client-side bypassing of Mechanical Gate validation.
+  - No direct modification of canonical state without going through backend HTTP routes.
+domain_owner: ui
+
+approval:
+  gate_run_id: gate_run_spec10_frontend_001
+  gate_rule_set_version: "1.0.0"
+  model_revision: "rev-1"
+  approved_by: "human_lead"
+  approved_at: "2026-09-09T23:55:00Z"
+  approval_evidence: "Automated regression tests, frontend interaction tests, backend API integration tests, and FIC schema validation all passing."
+
+contracts:
+  - name: director-chat-context-envelope
+    version: v1
+    change: additive
+  - name: workspace-api-routes
+    version: v1
+    change: additive
+
+categories:
+  - ui
+  - api
+  - gateway
+  - domain
+  - security
+
+data_sources:
+  - export-bundle-upload
+  - backend-http-api
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected:
+    - EXECUTION_BUDGET
+    - NO_INFINITE_LOOP
+    - MAX_SUSTAINED_DPS
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed: []
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected:
+    - human
+    - llm
+  workspace_rules_changed:
+    - "Strict workspace authorization enforced on all newly exposed frontend REST routes"
+
+security:
+  threats_addressed:
+    - "Unauthorized cross-workspace attack catalog query and mutation"
+    - "Direct client-side tampering of canonical domain state"
+    - "Unvalidated LLM intent injection bypassing Mechanical Gate"
+  invariants_affected:
+    - "Frontend interacts exclusively via HTTP fetch to backend API"
+    - "Mechanical Gate PASS is mandatory before applying any proposed ChangeSet"
+    - "Untrusted text tags preserved in all tool execution cards"
+
+audit:
+  events_added:
+    - "frontend_chat_turn"
+    - "changeset_applied"
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added:
+    - "GET /api/workspaces/:workspace_id/attacks"
+    - "GET /api/workspaces/:workspace_id/attacks/:attack_id"
+    - "POST /api/workspaces/:workspace_id/simulations"
+    - "POST /api/workspaces/:workspace_id/verifications"
+    - "GET /api/workspaces/:workspace_id/changesets"
+    - "GET /api/workspaces/:workspace_id/changesets/:changeset_id"
+    - "POST /api/workspaces/:workspace_id/changesets"
+    - "POST /api/workspaces/:workspace_id/changesets/:changeset_id/approve"
+    - "POST /api/workspaces/:workspace_id/changesets/:changeset_id/apply"
+    - "POST /api/workspaces/:workspace_id/changesets/:changeset_id/withdraw"
+    - "POST /api/workspaces/:workspace_id/chat"
+  endpoints_changed: []
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - frontend/tests/catalog.test.ts
+    - frontend/tests/workbench.test.ts
+    - frontend/tests/changeset-review.test.ts
+    - frontend/tests/director-chat-llm.test.ts
+  integration:
+    - backend/tests/integration/api/frontend-routes.test.ts
+  property: []
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - "api_request_count"
+    - "api_request_latency_ms"
+  traces:
+    - "http_get_api_workspaces_attacks"
+    - "http_post_api_workspaces_chat"
+  logs:
+    - "http_request_finished"
+
+rollback: Revert commit and remove frontend routes and page controllers.
+risks: Network latency between frontend and backend; mitigated by optimistic UI and robust error state handling.

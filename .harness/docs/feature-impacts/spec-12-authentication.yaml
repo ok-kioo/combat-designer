@@ -1,0 +1,144 @@
+feature_id: authentication-tenant-security-012
+title: JWT authentication + real workspace membership, replacing self-declared workspace header
+owner: Implementation Agent
+status: verified
+intent: Introduzir uma fonte real de identidade (usuário autenticado via credenciais próprias com JWT e refresh tokens rotacionados) e derivar toda autorização de workspace a partir dela, eliminando o bypass de tenant e impondo fail-closed por padrão.
+non_goals:
+  - SSO/OAuth com provedores externos nesta versão (v1).
+  - Multi-factor authentication.
+  - Permissões granulares finas por recurso (roles owner/editor/viewer cobrem v1).
+domain_owner: workspace
+
+approval:
+  gate_run_id: gate_run_spec12_auth_001
+  gate_rule_set_version: "1.0.0"
+  model_revision: "rev-1"
+  approved_by: "usr-developer-default"
+  approved_at: "2026-09-10T04:20:00Z"
+  approval_evidence: "Unit tests, integration tests for fail-closed tenant isolation, token rotation, family reuse revocation, and module boundaries passing."
+
+contracts:
+  - name: user
+    version: v1
+    change: additive
+  - name: workspace-membership
+    version: v1
+    change: additive
+  - name: refresh-token
+    version: v1
+    change: additive
+  - name: mcp-principal
+    version: v2
+    change: breaking
+
+categories:
+  - authorization
+  - security
+  - infrastructure
+  - api
+  - workspace
+
+data_sources:
+  - backend-auth-api
+  - postgres-auth-store
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected: []
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed:
+    - "GatewayAuthenticator.authenticate"
+  policy_changed:
+    - "Authorization: Bearer <jwt> substitui x-authorized-workspaces; GatewayAuthenticator passa a verificar assinatura, não só forma"
+  registry_changed: []
+
+authorization:
+  principals_affected:
+    - user
+    - workspace_member
+  workspace_rules_changed:
+    - "isWorkspaceAuthorized deriva de JWT verificado + WorkspaceMembership; fail-closed por padrão"
+
+security:
+  threats_addressed:
+    - "corrige bypass de tenant isolation: default-allow quando header ausente"
+    - "reutilização de refresh token roubado dispara revogação de família"
+    - "timing attacks em verificação de senhas (mitigado com timingSafeEqual)"
+  invariants_affected:
+    - "fail-closed por padrão: sem token ou sem membership retorna 401/403"
+    - "senhas salteadas com PBKDF2/scrypt e comparadas em tempo constante"
+    - "tokens sensíveis e senhas redactados de toda telemetria e logs"
+
+audit:
+  events_added:
+    - "auth_user_registered"
+    - "auth_user_logged_in"
+    - "auth_token_refreshed"
+    - "auth_user_logged_out"
+    - "auth_token_reuse_detected"
+  events_changed:
+    - "approved_by em FIC/GateResult passa a referenciar User.id real"
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added:
+    - "POST /api/auth/register"
+    - "POST /api/auth/login"
+    - "POST /api/auth/refresh"
+    - "POST /api/auth/logout"
+    - "GET /api/auth/me"
+  endpoints_changed:
+    - "ALL /api/workspaces/:workspace_id/* require verified Bearer token or authorized workspace membership"
+
+persistence:
+  postgres_migrations:
+    - "create table users"
+    - "create table workspace_memberships"
+    - "create table refresh_tokens"
+    - "add owner constraint on workspaces"
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - "backend/tests/unit/auth/password-hasher.test.ts"
+    - "backend/tests/unit/auth/token-service.test.ts"
+  integration:
+    - "backend/tests/integration/api/auth-tenant-security.test.ts"
+  property: []
+  fixtures:
+    - "user sem membership tentando acessar workspace de outro usuário"
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - "auth_login_total"
+    - "auth_refresh_total"
+    - "auth_failure_total"
+  traces:
+    - "http_post_api_auth_login"
+  logs:
+    - "auth_login_success"
+    - "auth_login_failure"
+    - "auth_reuse_revocation"
+
+rollback: "Reverter exige reintroduzir o header legado; planejar migração controlada de clientes para Bearer token."
+risks: "Maior superfície de ataque em endpoints de login/refresh; mitigado com rate limits, hashes seguros, e fail-closed por padrão."
