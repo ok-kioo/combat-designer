@@ -12,12 +12,12 @@
 //! 9. finalize_event_batch
 //! 10. snapshot
 
+use crate::domain::{CancelCondition, Frame, HitboxType};
 use crate::simulation::budget::{BudgetExceededReason, BudgetTracker};
 use crate::simulation::events::{SimulationEvent, SimulationEventType};
 use crate::simulation::metrics::SimulationMetrics;
 use crate::simulation::model::{ActiveAttackState, ActorCommand, ActorState};
 use crate::simulation::snapshot::SimulationSnapshot;
-use crate::domain::{CancelCondition, Frame, HitboxType};
 use std::collections::BTreeMap;
 
 pub struct FrameExecutionContext<'a> {

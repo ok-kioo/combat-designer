@@ -4,140 +4,169 @@ import type {
   UserPublic,
   AuthTokens,
   AccessTokenClaims,
-  WorkspaceMembership,
   RefreshToken,
 } from "../domain/entity/auth.entity.js";
 import type {
   UserRepositoryPort,
-  WorkspaceMembershipRepositoryPort,
   RefreshTokenRepositoryPort,
 } from "../domain/repository/auth-repository-ports.js";
-import { hashPassword, verifyPassword } from "./password-hasher.js";
-import { TokenService, DEFAULT_ACCESS_TOKEN_TTL_SECONDS, DEFAULT_REFRESH_TOKEN_TTL_DAYS } from "./token-service.js";
+import type { WorkspaceRepositoryPort } from "../../workspace/domain/repository/workspace-repository-port.js";
+import { hashPassword, verifyPassword, needsRehash } from "./password-hasher.js";
+import {
+  TokenService,
+  DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+  DEFAULT_REFRESH_TOKEN_TTL_DAYS,
+} from "./token-service.js";
 
 export interface RegisterInput {
-  email: string;
+  username: string;
   password: string;
-  display_name: string;
-  initialWorkspaceId?: string;
+  display_name?: string;
+  email?: string;
 }
 
 export interface LoginInput {
-  email: string;
+  username: string;
   password: string;
 }
 
 export class AuthService {
   private readonly userRepo: UserRepositoryPort;
-  private readonly membershipRepo: WorkspaceMembershipRepositoryPort;
   private readonly tokenRepo: RefreshTokenRepositoryPort;
+  private readonly workspaceRepo?: WorkspaceRepositoryPort;
   private readonly tokenService: TokenService;
 
   constructor(
     userRepo: UserRepositoryPort,
-    membershipRepo: WorkspaceMembershipRepositoryPort,
     tokenRepo: RefreshTokenRepositoryPort,
+    workspaceRepo?: WorkspaceRepositoryPort,
     tokenService: TokenService = new TokenService()
   ) {
     this.userRepo = userRepo;
-    this.membershipRepo = membershipRepo;
     this.tokenRepo = tokenRepo;
+    this.workspaceRepo = workspaceRepo;
     this.tokenService = tokenService;
   }
 
+  /**
+   * Registers a new user with Argon2id password hash and case-insensitive username.
+   * Per Spec 12: Does not accept client-provided workspace IDs; projects are created separately.
+   */
   public async register(input: RegisterInput): Promise<{
     user: UserPublic;
     tokens: AuthTokens;
-    workspace_id: string;
   }> {
-    const email = input.email.trim().toLowerCase();
-    if (!email || !email.includes("@")) {
-      throw new Error("INVALID_INPUT: A valid email address is required");
+    if (!input.username || typeof input.username !== "string" || input.username.trim() === "") {
+      throw new Error("INVALID_INPUT: A non-empty username is required");
     }
-    if (!input.password || input.password.length < 8) {
+    const trimmedUsername = input.username.trim();
+    if (trimmedUsername.length < 3 || trimmedUsername.length > 32) {
+      throw new Error("INVALID_INPUT: Username must be between 3 and 32 characters");
+    }
+    if (!/^[a-zA-Z0-9_.-]+$/.test(trimmedUsername)) {
+      throw new Error("INVALID_INPUT: Username may only contain alphanumeric characters, underscores, hyphens, and periods");
+    }
+
+    if (!input.password || typeof input.password !== "string" || input.password.length < 8) {
       throw new Error("INVALID_INPUT: Password must be at least 8 characters");
     }
-    const displayName = input.display_name?.trim() || email.split("@")[0];
 
-    const existing = await this.userRepo.findByEmail(email);
+    const existing = await this.userRepo.findByUsername(trimmedUsername);
     if (existing) {
-      throw new Error("EMAIL_ALREADY_EXISTS: An account with this email already exists");
+      throw new Error("USERNAME_ALREADY_EXISTS: An account with this username already exists");
     }
 
     const userId = crypto.randomUUID();
     const now = new Date().toISOString();
-    const passwordHash = hashPassword(input.password);
+    const passwordHash = await hashPassword(input.password);
+    const displayName = input.display_name?.trim() || trimmedUsername;
 
     const user: User = {
       id: userId,
-      email,
+      username: trimmedUsername,
       password_hash: passwordHash,
       display_name: displayName,
+      email: input.email?.trim(),
       status: "active",
       created_at: now,
+      updated_at: now,
       last_login_at: now,
     };
     await this.userRepo.save(user);
 
-    // Initial workspace creation & owner membership
-    const workspaceId = input.initialWorkspaceId || `ws-${userId.substring(0, 8)}`;
-    const membership: WorkspaceMembership = {
-      workspace_id: workspaceId,
-      user_id: userId,
-      role: "owner",
-      added_at: now,
-    };
-    await this.membershipRepo.save(membership);
-
     // Issue tokens
-    const tokens = await this.createTokensForUser(user, [membership]);
+    const tokens = await this.createTokensForUser(user);
 
     const publicUser: UserPublic = {
       id: user.id,
-      email: user.email,
+      username: user.username,
       display_name: user.display_name,
+      email: user.email,
       status: user.status,
       created_at: user.created_at,
+      updated_at: user.updated_at,
     };
 
     return {
       user: publicUser,
       tokens,
-      workspace_id: workspaceId,
     };
   }
 
+  /**
+   * Authenticates a user by username and password.
+   * Checks exclusively username; provides generic error response to prevent user enumeration.
+   * If user has a legacy PBKDF2 hash, migrates it to Argon2id upon successful verification.
+   */
   public async login(input: LoginInput): Promise<{ user: UserPublic; tokens: AuthTokens }> {
-    const email = input.email.trim().toLowerCase();
-    const user = await this.userRepo.findByEmail(email);
+    if (!input.username || typeof input.username !== "string" || !input.password) {
+      throw new Error("INVALID_CREDENTIALS: Incorrect username or password");
+    }
+
+    const user = await this.userRepo.findByUsername(input.username.trim());
 
     // Generic error message to prevent user enumeration
     if (!user || user.status !== "active") {
-      throw new Error("INVALID_CREDENTIALS: Incorrect email or password");
+      throw new Error("INVALID_CREDENTIALS: Incorrect username or password");
     }
 
-    const passwordValid = verifyPassword(input.password, user.password_hash);
+    const passwordValid = await verifyPassword(input.password, user.password_hash);
     if (!passwordValid) {
-      throw new Error("INVALID_CREDENTIALS: Incorrect email or password");
+      throw new Error("INVALID_CREDENTIALS: Incorrect username or password");
+    }
+
+    // Explicit migration: if stored hash was legacy PBKDF2, convert to Argon2id
+    if (needsRehash(user.password_hash) && this.userRepo.updatePasswordHash) {
+      try {
+        const modernHash = await hashPassword(input.password);
+        await this.userRepo.updatePasswordHash(user.id, modernHash);
+      } catch {
+        // Migration failure should not block successful login
+      }
     }
 
     const now = new Date().toISOString();
     await this.userRepo.updateLastLogin(user.id, now);
 
-    const memberships = await this.membershipRepo.findByUser(user.id);
-    const tokens = await this.createTokensForUser(user, memberships);
+    const tokens = await this.createTokensForUser(user);
 
     const publicUser: UserPublic = {
       id: user.id,
-      email: user.email,
+      username: user.username,
       display_name: user.display_name,
+      email: user.email,
       status: user.status,
       created_at: user.created_at,
+      updated_at: user.updated_at,
     };
 
     return { user: publicUser, tokens };
   }
 
+  /**
+   * Rotates a refresh token and returns a new token pair.
+   * Detects reuse of revoked tokens: revokes the entire token family if reuse is detected.
+   */
   public async refresh(refreshTokenString: string): Promise<AuthTokens> {
     if (!refreshTokenString || typeof refreshTokenString !== "string") {
       throw new Error("INVALID_REFRESH_TOKEN: Missing refresh token");
@@ -185,15 +214,10 @@ export class AuthService {
     await this.tokenRepo.markRevoked(record.id, newTokenId);
     await this.tokenRepo.save(newRecord);
 
-    const memberships = await this.membershipRepo.findByUser(user.id);
     const accessToken = this.tokenService.signAccessToken({
       sub: user.id,
-      email: user.email,
+      username: user.username,
       display_name: user.display_name,
-      workspaces: memberships.map((m) => ({
-        workspace_id: m.workspace_id,
-        role: m.role,
-      })),
     });
 
     return {
@@ -217,28 +241,26 @@ export class AuthService {
     return this.tokenService.verifyAccessToken(token);
   }
 
+  /**
+   * Derives authorization from Workspace.owner_user_id === authenticated_user.id.
+   * Spec 12 Rule: No roles, memberships, or self-declared headers.
+   */
   public async isUserAuthorizedForWorkspace(userId: string, workspaceId: string): Promise<boolean> {
-    const membership = await this.membershipRepo.findByWorkspaceAndUser(workspaceId, userId);
-    return membership !== null;
-  }
-
-  public async getMemberships(userId: string): Promise<WorkspaceMembership[]> {
-    return this.membershipRepo.findByUser(userId);
+    if (!this.workspaceRepo) return false;
+    const workspace = await this.workspaceRepo.findById(workspaceId);
+    if (!workspace) return false;
+    return workspace.owner_user_id === userId;
   }
 
   public getTokenService(): TokenService {
     return this.tokenService;
   }
 
-  private async createTokensForUser(user: User, memberships: WorkspaceMembership[]): Promise<AuthTokens> {
+  private async createTokensForUser(user: User): Promise<AuthTokens> {
     const accessToken = this.tokenService.signAccessToken({
       sub: user.id,
-      email: user.email,
+      username: user.username,
       display_name: user.display_name,
-      workspaces: memberships.map((m) => ({
-        workspace_id: m.workspace_id,
-        role: m.role,
-      })),
     });
 
     const { token: opaqueRefreshToken, hash } = this.tokenService.generateRefreshToken();

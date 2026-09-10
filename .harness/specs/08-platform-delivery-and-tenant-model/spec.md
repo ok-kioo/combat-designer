@@ -107,11 +107,16 @@ Layout de duas colunas, ambas escopadas ao `workspace_id` ativo:
 - **Esquerda — Painel do Projeto**: upload de Export Bundle, status de ingestão (assets
   processados/quarantined/conflict), revision/snapshot atual, histórico de GateResults e
   simulações.
-- **Direita — Diretor de Combate**: chat MCP/LLM (specs/06).
+- **Direita — Diretor de Combate**: chat MCP/LLM (specs/06, specs/13).
 
 Nenhuma ação no painel esquerdo escreve diretamente em canonical data — upload dispara o
 pipeline de specs/02, que segue as mesmas regras de QUARANTINED/CONFLICT/provenance já
 definidas.
+
+### Integração com SPEC 12 e SPEC 13 (User Projects & Conversation Isolation)
+- Conforme a SPEC 12, workspaces representam projetos de combate pertencentes a usuários individuais (`User 1 ─── N Workspace`).
+- Conforme a SPEC 13, o chat do Combat Director opera estritamente sob isolamento contextual identificado por `(user_id, workspace_id, conversation_id)`, impedindo qualquer vazamento cruzado entre projetos ou conversações.
+
 
 ## Feature Impact Contract
 

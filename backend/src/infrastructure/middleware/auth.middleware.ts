@@ -1,23 +1,28 @@
 import type http from "node:http";
-import type { AccessTokenClaims, WorkspaceRole } from "../../modules/auth/domain/entity/auth.entity.js";
+import type { AccessTokenClaims } from "../../modules/auth/domain/entity/auth.entity.js";
 import type { AuthService } from "../../modules/auth/service/auth-service.js";
+import type { WorkspaceAuthorizationPort } from "../../modules/workspace/domain/port/workspace-authorization-port.js";
 
 export interface AuthContext {
   userId: string;
-  email: string;
+  username: string;
   displayName: string;
-  workspaces: Array<{ workspace_id: string; role: WorkspaceRole }>;
 }
 
 export type AuthResult =
   | { authenticated: true; context: AuthContext }
-  | { authenticated: false; status: 401 | 403; code: string; message: string };
+  | { authenticated: false; status: 401 | 403 | 404; code: string; message: string };
 
 export class AuthMiddleware {
   private readonly authService: AuthService;
+  private readonly authorizationPort?: WorkspaceAuthorizationPort;
 
-  constructor(authService: AuthService) {
+  constructor(
+    authService: AuthService,
+    authorizationPort?: WorkspaceAuthorizationPort
+  ) {
     this.authService = authService;
+    this.authorizationPort = authorizationPort;
   }
 
   /**
@@ -35,8 +40,8 @@ export class AuthMiddleware {
   }
 
   /**
-   * Verifies the request token and checks workspace membership.
-   * Fail-Closed: any error, missing token, or unverified workspace yields a 401 or 403.
+   * Verifies the request token and checks workspace ownership.
+   * Fail-Closed: any error, missing token, or unauthorized project yields 401 or 403.
    */
   public async verifyRequest(
     req: http.IncomingMessage,
@@ -68,34 +73,48 @@ export class AuthMiddleware {
 
     const context: AuthContext = {
       userId: claims.sub,
-      email: claims.email,
+      username: claims.username,
       displayName: claims.display_name,
-      workspaces: claims.workspaces,
     };
 
-    // If workspace-specific route, verify membership
+    // If workspace-specific route, verify project ownership (User 1 --- N Workspace)
     if (targetWorkspaceId) {
-      // 1. Check claim snapshot
-      const hasClaim = claims.workspaces.some(
-        (w) => w.workspace_id === targetWorkspaceId || w.workspace_id === "*"
-      );
-
-      // 2. Revalidate with repository for writing/stale protection
-      const isAuthorizedInDb = await this.authService.isUserAuthorizedForWorkspace(
-        claims.sub,
-        targetWorkspaceId
-      );
-
-      if (!hasClaim && !isAuthorizedInDb) {
-        return {
-          authenticated: false,
-          status: 403,
-          code: "FORBIDDEN",
-          message: `User '${claims.email}' is not a member of workspace '${targetWorkspaceId}'`,
-        };
+      if (this.authorizationPort) {
+        const authResult = await this.authorizationPort.authorize(claims.sub, targetWorkspaceId);
+        if (!authResult.authorized) {
+          return {
+            authenticated: false,
+            status: (authResult.status === 200 ? 403 : authResult.status) as 401 | 403 | 404,
+            code: authResult.code,
+            message: authResult.message,
+          };
+        }
+      } else {
+        const isAuthorized = await this.authService.isUserAuthorizedForWorkspace(
+          claims.sub,
+          targetWorkspaceId
+        );
+        if (!isAuthorized) {
+          return {
+            authenticated: false,
+            status: 403,
+            code: "FORBIDDEN",
+            message: `User '${claims.username}' does not own workspace '${targetWorkspaceId}'`,
+          };
+        }
       }
     }
 
     return { authenticated: true, context };
+  }
+
+  /**
+   * Alias for verifyRequest to facilitate consistent controller and server call sites.
+   */
+  public async authenticate(
+    req: http.IncomingMessage,
+    targetWorkspaceId?: string
+  ): Promise<AuthResult> {
+    return this.verifyRequest(req, targetWorkspaceId);
   }
 }

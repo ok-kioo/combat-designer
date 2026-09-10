@@ -14,7 +14,9 @@ export function validateWorkspaceAccess(
     return;
   }
 
-  const isAuthorized = principal.authorized_workspaces.includes(targetWorkspaceId);
+  const isAuthorized =
+    principal.authorized_workspaces.includes(targetWorkspaceId) ||
+    principal.authorized_workspaces.includes("*");
   if (!isAuthorized) {
     throw new McpError(
       "WORKSPACE_MISMATCH",

@@ -338,6 +338,18 @@ Nova tool exige schema, auth scope, capability entry no Tool Registry, contract 
 - specs/05 (Mechanical Gate) — gate rules e GateResult
 - specs/08 (Platform) — workspace model
 - specs/09 (Security) — execution limits, workspace isolation
+- specs/13 (Combat Director Chat) — fluxo consultivo (Proposal → Simulation → Mechanical Validation → Spec Validation → Recommendation), Tool Allowlist por Skill e ausência de combat_apply_change
 - docs/architecture/mcp-gateway.md — gateway architecture
 - regras/mcp-gateway-invariants.md — invariantes
 - regras/suggest-improvements.md — ciclo SUGGESTED→ACCEPTED|DEFERRED|REJECTED (withdraw_changeset)
+
+---
+
+## Alinhamento com a SPEC 13 (Combat Director Chat & Safety)
+
+1. **Fluxo Consultivo Exclusivo**: O Combat Director opera no pipeline canônico:
+   `User Request → Skill → Authorized Tools → Proposal → Simulation → Mechanical Validation → Spec Validation → Recommendation`.
+2. **Ausência de Mutação Direta**: O Combat Director **não possui ferramenta `combat_apply_change`** nem altera diretamente a engine/Unity.
+3. **Tool Allowlist por Skill**: Toda chamada de ferramenta pelo assistente deve pertencer à allowlist declarada na Skill ativa (`SkillRegistry`), retornando `TOOL_DENIED` caso contrário.
+4. **Terminologia**: Utilizar *Mechanical Validator* e *Mechanical Validation* no escopo de validação de propostas do Combat Director.
+

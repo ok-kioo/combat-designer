@@ -22,7 +22,7 @@ export class PolicyEngine {
       if (!workspace_id || workspace_id.trim() === "") {
         return { allowed: false, reason: "workspace_id is strictly required.", code: "WORKSPACE_REQUIRED" };
       }
-      if (!principal.authorized_workspaces.includes(workspace_id)) {
+      if (!principal.authorized_workspaces.includes(workspace_id) && !principal.authorized_workspaces.includes("*")) {
         return {
           allowed: false,
           reason: `Principal '${principal.principal_id}' is not authorized for workspace '${workspace_id}'.`,

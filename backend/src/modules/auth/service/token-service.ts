@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import type { AccessTokenClaims } from "../domain/entity/auth.entity.js";
 
-export const DEFAULT_JWT_SECRET = process.env.JWT_SECRET || "combat-designer-jwt-secret-key-2026-production-ready";
+export const DEFAULT_JWT_SECRET =
+  process.env.JWT_SECRET || "combat-designer-jwt-secret-key-2026-production-ready";
 export const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
 export const DEFAULT_REFRESH_TOKEN_TTL_DAYS = 30;
 
@@ -18,13 +19,18 @@ export class TokenService {
   private readonly secret: string;
   private readonly accessTokenTtl: number;
 
-  constructor(secret: string = DEFAULT_JWT_SECRET, accessTokenTtl = DEFAULT_ACCESS_TOKEN_TTL_SECONDS) {
+  constructor(
+    secret: string = DEFAULT_JWT_SECRET,
+    accessTokenTtl = DEFAULT_ACCESS_TOKEN_TTL_SECONDS
+  ) {
     this.secret = secret;
     this.accessTokenTtl = accessTokenTtl;
   }
 
   /**
-   * Signs an HS256 JWT containing the AccessTokenClaims.
+   * Signs an HS256 JWT containing canonical AccessTokenClaims.
+   * Per Spec 12: claims contain sub (user_id), username, display_name, iat, exp.
+   * Never contains a list of workspaces or permissions.
    */
   public signAccessToken(
     payload: Omit<AccessTokenClaims, "iat" | "exp">,
@@ -33,7 +39,9 @@ export class TokenService {
     const header = { alg: "HS256", typ: "JWT" };
     const now = Math.floor(Date.now() / 1000);
     const claims: AccessTokenClaims = {
-      ...payload,
+      sub: payload.sub,
+      username: payload.username,
+      display_name: payload.display_name,
       iat: now,
       exp: now + ttlSeconds,
     };
@@ -51,8 +59,8 @@ export class TokenService {
   }
 
   /**
-   * Verifies the HS256 signature and expiration of a JWT.
-   * Throws an Error if invalid or expired.
+   * Verifies the HS256 signature, algorithm, expiration, and mandatory claims of a JWT.
+   * Throws an Error if invalid, tampered, algorithm-confused, or expired.
    */
   public verifyAccessToken(token: string): AccessTokenClaims {
     if (!token || typeof token !== "string") {
@@ -65,8 +73,21 @@ export class TokenService {
     }
 
     const [encodedHeader, encodedPayload, receivedSignature] = parts;
-    const dataToSign = `${encodedHeader}.${encodedPayload}`;
 
+    // 1. Verify algorithm (prevent algorithm confusion attacks like none or RS256 with HMAC secret)
+    let header: { alg?: string; typ?: string };
+    try {
+      header = JSON.parse(base64UrlDecode(encodedHeader));
+    } catch {
+      throw new Error("INVALID_TOKEN: Could not parse token header");
+    }
+
+    if (header.alg !== "HS256") {
+      throw new Error(`INVALID_ALGORITHM: Unsupported algorithm '${header.alg}', expected 'HS256'`);
+    }
+
+    // 2. Verify signature constant-time
+    const dataToSign = `${encodedHeader}.${encodedPayload}`;
     const expectedSignature = crypto
       .createHmac("sha256", this.secret)
       .update(dataToSign)
@@ -82,6 +103,7 @@ export class TokenService {
       throw new Error("INVALID_TOKEN: Signature verification failed");
     }
 
+    // 3. Parse claims
     let claims: AccessTokenClaims;
     try {
       claims = JSON.parse(base64UrlDecode(encodedPayload)) as AccessTokenClaims;
@@ -89,6 +111,15 @@ export class TokenService {
       throw new Error("INVALID_TOKEN: Could not parse token claims");
     }
 
+    // 4. Validate mandatory claims (sub, username)
+    if (!claims.sub || typeof claims.sub !== "string" || claims.sub.trim() === "") {
+      throw new Error("INVALID_CLAIMS: Missing required claim 'sub'");
+    }
+    if (!claims.username || typeof claims.username !== "string" || claims.username.trim() === "") {
+      throw new Error("INVALID_CLAIMS: Missing required claim 'username'");
+    }
+
+    // 5. Validate expiration
     const now = Math.floor(Date.now() / 1000);
     if (claims.exp && claims.exp < now) {
       throw new Error(`TOKEN_EXPIRED: Token expired at timestamp ${claims.exp}`);

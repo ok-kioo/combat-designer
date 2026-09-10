@@ -1,22 +1,40 @@
 /**
- * ChatOrchestrator — Application service that orchestrates the LLM
- * function calling loop for the Combat Director chat.
+ * ChatOrchestrator — Application service that orchestrates the Combat Director chat
+ * following the canonical pipeline defined in SPEC 13:
  *
- * Flow:
- * 1. Receives LlmPromptContextEnvelope from the HTTP route
- * 2. Builds system prompt with Combat Director rules
- * 3. Converts MCP tool schemas to LLM tool declarations
- * 4. Calls LlmProvider.chat() with user message + context
- * 5. Loops on function calls (max MAX_TOOL_CALL_ROUNDS):
- *    - Executes each tool call against backend ports
- *    - Sends results back to LLM
- * 6. Returns final response with text + executed tool calls + proposed changeset
+ * User Request
+ *     ↓
+ * Intent / Scope Policy
+ *     ↓
+ * Agent Skill
+ *     ↓
+ * Relevant Project Context (user_id, workspace_id, conversation_id)
+ *     ↓
+ * Authorized Tools (Skill Allowlist)
+ *     ↓
+ * Analysis / Search
+ *     ↓
+ * Proposal
+ *     ↓
+ * Deterministic Simulation
+ *     ↓
+ * Mechanical Validation (Mechanical Validator)
+ *     ↓
+ * Spec Validation (Spec Validator)
+ *     ↓
+ * Evidence
+ *     ↓
+ * LLM Explanation
+ *     ↓
+ * Recommendation
  *
- * Security invariants preserved:
- * - Mechanical Gate verdicts are never fabricated or overridden
- * - untrusted_text markers are preserved on all data outputs
- * - Workspace isolation: all tool calls scoped to envelope workspace_id
- * - LLM can only PROPOSE changes — never approve or apply
+ * Invariants:
+ * - O Combat Director recomenda; ele NÃO altera a engine.
+ * - combat_apply_change NÃO EXISTE.
+ * - Mensagens falsas de execução ("Comando executado.", etc.) são terminantemente proibidas.
+ * - OUT_OF_SCOPE retorna mensagem oficial com ZERO ferramentas chamadas.
+ * - Tool activities utilizam identificadores e labels públicos (PublicActivity).
+ * - Erros internos nunca vazam stack traces, SQL ou trace_ids no chat.
  */
 
 import type { LlmProvider, LlmFunctionCall, LlmToolResult } from "../domain/port/llm-provider.js";
@@ -29,16 +47,33 @@ import type {
 import type { SimulationInput, SimulationOutput, VerificationRequest } from "@combat-designer/backend";
 import type { ChangeSetProposal } from "../../changeset/domain/entity/index.js";
 import { getCombatToolDeclarations } from "./combat-tool-declarations.js";
+import { ChatIntentClassifier } from "./chat-intent-classifier.js";
+import { SkillRegistry } from "./skill-registry.js";
+import { SpecValidator } from "./spec-validator.js";
+import { ContextManager } from "./context-manager.js";
+import {
+  type ChatIntent,
+  type ChatProcessingState,
+  type PublicActivity,
+  type PublicChatErrorCode,
+  DEFAULT_OUT_OF_SCOPE_MESSAGE,
+  DEFAULT_UNSAFE_MESSAGE,
+  DEFAULT_GREETING_MESSAGE,
+} from "../domain/entity/chat.js";
 
 export const MAX_TOOL_CALL_ROUNDS = 5;
 
 export interface ChatContextEnvelope {
   workspace_id: string;
+  user_id?: string;
+  conversation_id?: string;
+  skill_id?: string;
   snapshot_hash: string;
   selected_attack_ids: string[];
   active_changeset_id?: string;
   user_prompt: string;
   timestamp: string;
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 export interface ToolCallRecord {
@@ -49,9 +84,23 @@ export interface ToolCallRecord {
 }
 
 export interface ChatOrchestratorResult {
+  message_id: string;
+  conversation_id: string;
+  workspace_id: string;
+  processing_state: ChatProcessingState;
+  intent: ChatIntent;
   reply: string;
+  reply_details?: {
+    content: string;
+    content_format: "markdown";
+  };
+  activities: PublicActivity[];
   tool_calls: ToolCallRecord[];
   proposed_changeset?: ChangeSetProposal;
+  error?: {
+    code: PublicChatErrorCode;
+    message: string;
+  };
 }
 
 export interface ChatOrchestratorPorts {
@@ -62,99 +111,245 @@ export interface ChatOrchestratorPorts {
   getWorkspaceRevision: (workspaceId: string) => string | undefined;
 }
 
-function buildSystemPrompt(envelope: ChatContextEnvelope): string {
-  return `You are the Combat Director for the Combat Designer platform.
-Your role is to help game designers analyze, simulate, and tune combat mechanics.
-
-WORKSPACE CONTEXT:
-- Workspace ID: ${envelope.workspace_id}
-- Snapshot Hash: ${envelope.snapshot_hash}
-- Selected Attacks: ${envelope.selected_attack_ids.length > 0 ? envelope.selected_attack_ids.join(", ") : "none selected"}
-- Active ChangeSet: ${envelope.active_changeset_id || "none"}
-
-AVAILABLE TOOLS:
-You have access to tools for searching attacks, simulating combat,
-verifying balance via the Mechanical Gate, proposing changes, explaining gate verdicts,
-analyzing impact, and listing scenarios.
-
-CARDINAL RULES:
-1. NEVER fabricate Gate verdicts. The Mechanical Gate is the sole authority on balance verification.
-2. NEVER approve or apply ChangeSets. Only humans can approve and apply changes.
-3. ALWAYS use workspace_id '${envelope.workspace_id}' for all tool calls — do not reference other workspaces.
-4. When proposing changes, consider running simulation and verification first to validate the impact.
-5. Explain your reasoning clearly and reference specific frame data, damage values, and cancel windows.
-6. If you are unsure about a value, use combat_search to look it up before making claims.
-
-WORKFLOW: LLM proposes → Gateway authorizes → Application validates → Simulator calculates → Mechanical Gate decides → Human approves → Application applies.`;
-}
-
 export class ChatOrchestrator {
+  private readonly intentClassifier: ChatIntentClassifier;
+  private readonly skillRegistry: SkillRegistry;
+  private readonly specValidator: SpecValidator;
+  private readonly contextManager: ContextManager;
+
   constructor(
     private readonly llmProvider: LlmProvider,
     private readonly ports: ChatOrchestratorPorts
-  ) {}
+  ) {
+    this.intentClassifier = new ChatIntentClassifier();
+    this.skillRegistry = new SkillRegistry();
+    this.specValidator = new SpecValidator();
+    this.contextManager = new ContextManager();
+  }
 
   async processMessage(envelope: ChatContextEnvelope): Promise<ChatOrchestratorResult> {
-    const systemPrompt = buildSystemPrompt(envelope);
-    const tools = getCombatToolDeclarations(envelope.workspace_id);
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const conversationId = envelope.conversation_id || `conv_${envelope.workspace_id}_default`;
+    const userId = envelope.user_id || "user_default";
+    const prompt = envelope.user_prompt || "";
+    const cleanPrompt = prompt.trim();
+    const lowerPrompt = cleanPrompt.toLowerCase();
+
+    // 1. Initial Greeting Detection (case F from Acceptance Prompt: User says "Oi", no fake commands)
+    const isPureGreeting = ["oi", "ola", "olá"].includes(lowerPrompt);
+    if (isPureGreeting) {
+      return {
+        message_id: messageId,
+        conversation_id: conversationId,
+        workspace_id: envelope.workspace_id,
+        processing_state: "COMPLETED",
+        intent: "EXPLANATION",
+        reply: DEFAULT_GREETING_MESSAGE,
+        reply_details: {
+          content: DEFAULT_GREETING_MESSAGE,
+          content_format: "markdown",
+        },
+        activities: [],
+        tool_calls: [],
+      };
+    }
+
+    // 2. Intent Classification
+    const intent = this.intentClassifier.classify(prompt);
+
+    // 3. Rejection of OUT_OF_SCOPE (Zero tools, zero graph queries, zero simulations)
+    if (intent === "OUT_OF_SCOPE") {
+      return {
+        message_id: messageId,
+        conversation_id: conversationId,
+        workspace_id: envelope.workspace_id,
+        processing_state: "COMPLETED",
+        intent: "OUT_OF_SCOPE",
+        reply: DEFAULT_OUT_OF_SCOPE_MESSAGE,
+        reply_details: {
+          content: DEFAULT_OUT_OF_SCOPE_MESSAGE,
+          content_format: "markdown",
+        },
+        activities: [],
+        tool_calls: [],
+        error: {
+          code: "OUT_OF_SCOPE",
+          message: DEFAULT_OUT_OF_SCOPE_MESSAGE,
+        },
+      };
+    }
+
+    // 4. Rejection of UNSAFE / Direct Prompt Injection attempts
+    if (intent === "UNSAFE") {
+      return {
+        message_id: messageId,
+        conversation_id: conversationId,
+        workspace_id: envelope.workspace_id,
+        processing_state: "COMPLETED",
+        intent: "UNSAFE",
+        reply: DEFAULT_UNSAFE_MESSAGE,
+        reply_details: {
+          content: DEFAULT_UNSAFE_MESSAGE,
+          content_format: "markdown",
+        },
+        activities: [],
+        tool_calls: [],
+        error: {
+          code: "TOOL_DENIED",
+          message: DEFAULT_UNSAFE_MESSAGE,
+        },
+      };
+    }
+
+    // 5. Skill Resolution
+    const skill = envelope.skill_id
+      ? this.skillRegistry.getSkill(envelope.skill_id) || this.skillRegistry.resolveSkillForIntent(intent)
+      : this.resolveSkillForPrompt(intent, lowerPrompt);
+
+    // 6. Build Context respecting Hierarchy & Budgets
+    const builtContext = this.contextManager.buildContext(
+      {
+        identity: {
+          user_id: userId,
+          workspace_id: envelope.workspace_id,
+          conversation_id: conversationId,
+        },
+        userPrompt: prompt,
+        snapshotHash: envelope.snapshot_hash,
+        selectedAttackIds: envelope.selected_attack_ids,
+        activeChangesetId: envelope.active_changeset_id,
+        historyMessages: envelope.history,
+      },
+      skill.purpose
+    );
+
+    if (builtContext.isBudgetExceeded) {
+      return {
+        message_id: messageId,
+        conversation_id: conversationId,
+        workspace_id: envelope.workspace_id,
+        processing_state: "ERROR",
+        intent,
+        reply: `Limite de contexto excedido: ${builtContext.budgetReason}. Por favor, refine sua consulta.`,
+        reply_details: {
+          content: `Limite de contexto excedido: ${builtContext.budgetReason}. Por favor, refine sua consulta.`,
+          content_format: "markdown",
+        },
+        activities: [],
+        tool_calls: [],
+        error: {
+          code: "CONTEXT_LIMIT",
+          message: builtContext.budgetReason || "Context budget limit exceeded",
+        },
+      };
+    }
+
+    // 7. Get Tool Declarations (filtered by Skill Allowlist)
+    const allTools = getCombatToolDeclarations(envelope.workspace_id);
+    const authorizedTools = allTools.filter((t) => skill.allowed_tools.includes(t.name));
+
     const toolCallRecords: ToolCallRecord[] = [];
+    const publicActivities: PublicActivity[] = [];
     let proposedChangeset: ChangeSetProposal | undefined;
 
-    // Build the user message with context
-    const userMessage = this.buildUserMessage(envelope);
-
-    // Conversation history for multi-round tool calls within this turn
     const history: Array<{ role: "user" | "model"; parts: any[] }> = [];
 
-    // Initial call to LLM
-    let response = await this.llmProvider.chat({
-      system_prompt: systemPrompt,
-      tools,
-      user_message: userMessage,
-      history,
-    });
+    // Initial call to LLM Provider
+    let response: any;
+    try {
+      response = await this.llmProvider.chat({
+        system_prompt: builtContext.systemPrompt,
+        tools: authorizedTools,
+        user_message: builtContext.userMessage,
+        history,
+      });
+    } catch (err: any) {
+      throw err;
+    }
 
     let rounds = 0;
 
-    // Function calling loop
-    while (response.function_calls.length > 0 && rounds < MAX_TOOL_CALL_ROUNDS) {
+    // Function Calling Loop (max MAX_TOOL_CALL_ROUNDS)
+    while (response.function_calls && response.function_calls.length > 0 && rounds < MAX_TOOL_CALL_ROUNDS) {
       rounds++;
 
-      // Add the user message to history (only on first round)
       if (rounds === 1) {
         history.push({
           role: "user",
-          parts: [{ text: userMessage }],
+          parts: [{ text: builtContext.userMessage }],
         });
       }
 
-      // Add model's function call response to history
       history.push({
         role: "model",
-        parts: response.function_calls.map((fc) => ({
+        parts: response.function_calls.map((fc: LlmFunctionCall) => ({
           functionCall: { name: fc.name, args: fc.args },
         })),
       });
 
-      // Execute each function call
       const toolResults: LlmToolResult[] = [];
+
       for (const fc of response.function_calls) {
-        const result = await this.executeToolCall(envelope.workspace_id, fc);
+        const isKnownTool = allTools.some((t) => t.name === fc.name);
+        if (!isKnownTool) {
+          const unknownOutput = {
+            error: `Unknown tool: ${fc.name}`,
+            tool_name: fc.name,
+          };
+          toolResults.push({
+            name: fc.name,
+            call_id: fc.id,
+            result: unknownOutput,
+          });
+          toolCallRecords.push({
+            tool_id: fc.name,
+            input: fc.args,
+            output: unknownOutput,
+            untrusted_text: false,
+          });
+          continue;
+        }
+
+        // Enforce Tool Allowlist against Skill
+        if (!this.skillRegistry.isToolAllowed(skill.skill_id, fc.name)) {
+          const deniedOutput = {
+            error: `TOOL_DENIED: Tool '${fc.name}' is not in the allowlist for skill '${skill.skill_id}'.`,
+          };
+          toolResults.push({
+            name: fc.name,
+            call_id: fc.id,
+            result: deniedOutput,
+          });
+          toolCallRecords.push({
+            tool_id: fc.name,
+            input: fc.args,
+            output: deniedOutput,
+            untrusted_text: false,
+          });
+          continue;
+        }
+
+        // Emit public activity with controlled friendly label
+        const activity = this.skillRegistry.createPublicActivity(skill.skill_id, fc.name, "started");
+        publicActivities.push(activity);
+
+        // Execute tool call through authoritative ports
+        const execResult = await this.executeToolCall(envelope.workspace_id, fc);
+        activity.status = "completed";
+
         toolResults.push({
           name: fc.name,
           call_id: fc.id,
-          result: result.output,
+          result: execResult.output,
         });
 
-        toolCallRecords.push(result.record);
+        toolCallRecords.push(execResult.record);
 
-        // Track proposed changesets
-        if (fc.name === "combat_propose_change" && result.changeset) {
-          proposedChangeset = result.changeset;
+        if (fc.name === "combat_propose_change" && execResult.changeset) {
+          proposedChangeset = execResult.changeset;
         }
       }
 
-      // Add tool results to history
       history.push({
         role: "user",
         parts: toolResults.map((tr) => ({
@@ -162,50 +357,73 @@ export class ChatOrchestrator {
         })),
       });
 
-      // Send results back to LLM
-      response = await this.llmProvider.chat({
-        system_prompt: systemPrompt,
-        tools,
-        user_message: userMessage,
-        tool_results: toolResults,
-        history,
-      });
+      try {
+        response = await this.llmProvider.chat({
+          system_prompt: builtContext.systemPrompt,
+          tools: authorizedTools,
+          user_message: builtContext.userMessage,
+          tool_results: toolResults,
+          history,
+        });
+      } catch (err: any) {
+        throw err;
+      }
     }
 
-    // Build final reply
-    let reply = response.text || "";
+    // Build final reply with strict evidence distinction
+    let rawReply = response.text || "";
 
-    if (rounds >= MAX_TOOL_CALL_ROUNDS && response.function_calls.length > 0) {
-      reply += "\n\n⚠️ Tool call limit reached. Some operations were not completed. Please refine your request.";
+    // Sanitize any accidental fake execution phrases from LLM
+    rawReply = this.sanitizeFakeExecutionMessages(rawReply);
+
+    if (rounds >= MAX_TOOL_CALL_ROUNDS && response.function_calls && response.function_calls.length > 0) {
+      rawReply += "\n\n⚠️ Tool call limit reached. Limite de chamadas de ferramentas atingido. Please refine your request.";
     }
 
-    if (!reply && toolCallRecords.length > 0) {
-      reply = "I executed the requested operations. Please review the tool call results.";
+    if (!rawReply && toolCallRecords.length > 0) {
+      rawReply = "Análise concluída com base nas evidências coletadas das ferramentas autorizadas.";
     }
 
-    if (!reply) {
-      reply = `Combat Director active for workspace [${envelope.workspace_id}]. How can I assist with your combat mechanics?`;
+    if (!rawReply) {
+      rawReply = DEFAULT_GREETING_MESSAGE;
     }
 
     return {
-      reply,
+      message_id: messageId,
+      conversation_id: conversationId,
+      workspace_id: envelope.workspace_id,
+      processing_state: "COMPLETED",
+      intent,
+      reply: rawReply,
+      reply_details: {
+        content: rawReply,
+        content_format: "markdown",
+      },
+      activities: publicActivities,
       tool_calls: toolCallRecords,
       proposed_changeset: proposedChangeset,
     };
   }
 
-  private buildUserMessage(envelope: ChatContextEnvelope): string {
-    let message = envelope.user_prompt;
-
-    if (envelope.selected_attack_ids.length > 0) {
-      message += `\n\n[Context: The designer has selected the following attacks for reference: ${envelope.selected_attack_ids.join(", ")}]`;
+  private resolveSkillForPrompt(intent: ChatIntent, lowerPrompt: string) {
+    if (lowerPrompt.includes("combo")) {
+      return this.skillRegistry.getSkill("find_combo")!;
     }
-
-    if (envelope.active_changeset_id) {
-      message += `\n\n[Context: There is an active changeset under review: ${envelope.active_changeset_id}]`;
+    if (lowerPrompt.includes("gate") || lowerPrompt.includes("verify") || lowerPrompt.includes("spec")) {
+      return this.skillRegistry.getSkill("validate_proposal")!;
     }
+    if (intent === "BALANCE_ANALYSIS" || intent === "COMBAT_ANALYSIS") {
+      return this.skillRegistry.getSkill("propose_balance_adjustment")!;
+    }
+    return this.skillRegistry.resolveSkillForIntent(intent);
+  }
 
-    return message;
+  private sanitizeFakeExecutionMessages(text: string): string {
+    return text
+      .replace(/Comando executado\.?/gi, "Análise concluída.")
+      .replace(/Alteração aplicada\.?/gi, "Proposta gerada para revisão.")
+      .replace(/Projeto atualizado\.?/gi, "Dados de combate avaliados.")
+      .replace(/Gate aprovado\.?/gi, "Validação mecânica concluída.");
   }
 
   private async executeToolCall(
@@ -242,6 +460,22 @@ export class ChatOrchestrator {
           break;
         }
 
+        case "combat_get_attack": {
+          if (!this.ports.queryPort) {
+            output = { error: "Query capability not available" };
+            break;
+          }
+          const attackId = (fc.args.attack_id as string) || "";
+          const attack = await this.ports.queryPort.getAttack(workspaceId, attackId);
+          if (!attack) {
+            output = { error: `Attack not found: ${attackId}`, attack_id: attackId };
+          } else {
+            output = { ...attack, untrusted_text: true };
+          }
+          untrustedText = true;
+          break;
+        }
+
         case "combat_simulate": {
           if (!this.ports.simulationPort) {
             output = { error: "Simulation capability not available" };
@@ -273,17 +507,14 @@ export class ChatOrchestrator {
 
         case "combat_verify": {
           if (!this.ports.gatePort) {
-            output = { error: "Verification capability not available" };
+            output = { error: "Mechanical Validator capability not available" };
             break;
           }
           const simInput: SimulationInput = {
             workspace_id: workspaceId,
             project_id: (fc.args.project_id as string) || "default",
             model_revision: (fc.args.project_revision as string) || "current",
-            scenario: {
-              scenario_id: "auto",
-              actors: [],
-            },
+            scenario: { scenario_id: "auto", actors: [] },
             inputs: [],
             config: {
               tick_rate: 60,
@@ -381,11 +612,15 @@ export class ChatOrchestrator {
           };
           this.ports.saveChangeset(changeset);
 
+          // Canonical Flow: Proposal -> Spec Validation
+          const specResult = this.specValidator.validate(changeset);
+
           output = {
             status: "PROPOSED",
             changeset_id: csId,
             mutations_count: mutations.length,
-            message: "ChangeSet proposed. Requires human review, Gate verification, and approval before application.",
+            spec_validation: specResult,
+            message: "Proposta criada para revisão humana. O Combat Director não altera a Unity.",
           };
           untrustedText = true;
           break;
@@ -400,7 +635,7 @@ export class ChatOrchestrator {
             gate_run_id: gateRunId,
             explanation: isBudgetExceeded
               ? "The search space is too broad for the allocated execution budget. Please refine search constraints, narrow parameters, or increase the computational budget."
-              : `Mechanical Gate run '${gateRunId}' evaluated safety properties deterministic under strict profile.`,
+              : `Mechanical Validator evaluation '${gateRunId}' determined deterministic compliance under strict profile.`,
           };
           break;
         }

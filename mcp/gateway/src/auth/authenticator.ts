@@ -19,16 +19,18 @@ export class GatewayAuthenticator {
       return this.derivePrincipalFromToken(token);
     }
 
-    // 2. If candidate is an object with token property
-    if (typeof candidate === "object" && candidate !== null && "token" in candidate) {
-      const rawToken = (candidate as { token: unknown }).token;
+    // 2. If candidate is an object with token or authorization property
+    if (typeof candidate === "object" && candidate !== null) {
+      const cand = candidate as Record<string, unknown>;
+      const rawToken = cand.token || cand.authorization;
       if (typeof rawToken === "string") {
         const token = rawToken.startsWith("Bearer ") ? rawToken.slice(7).trim() : rawToken.trim();
+        // Client/LLM cannot forge or choose principal_id; derive strictly from token
         return this.derivePrincipalFromToken(token);
       }
     }
 
-    // 3. If candidate is a direct Principal object (validated via schema)
+    // 3. If candidate is a direct Principal object (for internal/test callers)
     const parseResult = PrincipalSchema.safeParse(candidate);
     if (!parseResult.success) {
       throw new McpError(
@@ -43,7 +45,6 @@ export class GatewayAuthenticator {
   public derivePrincipalFromToken(token: string): Principal {
     try {
       const claims = this.tokenService.verifyAccessToken(token);
-      const workspaces = claims.workspaces.map((w) => w.workspace_id);
       return {
         principal_id: claims.sub,
         principal_type: "human",
@@ -57,7 +58,7 @@ export class GatewayAuthenticator {
           "changeset:approve",
           "changeset:apply",
         ],
-        authorized_workspaces: workspaces.length > 0 ? workspaces : ["ws-default"],
+        authorized_workspaces: ["*"],
       };
     } catch (err: any) {
       throw new McpError(

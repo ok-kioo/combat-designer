@@ -1,0 +1,150 @@
+feature_id: combat-director-chat-013
+title: Combat Director Chat, Context Management & LLM Safety
+owner: Implementation Agent
+status: verified
+intent: Implement a robust, safe, evidence-oriented conversational experience for the Combat Director, restricting LLM to combat systems analysis (frame data, balance, combos, simulation, impact, validation, and proposals) while enforcing context hierarchy, tool allowlists per skill, typed error codes, safe markdown streaming/sanitization, and strict workspace/user isolation without direct engine mutation.
+non_goals:
+  - No general purpose chatbot functionality.
+  - No direct modification of the Unity project or engine.
+  - No combat_apply_change tool in Combat Director.
+  - No LLM fabrication of SimulationResult or MechanicalValidationResult.
+  - No execution of tools or graph queries when intent is OUT_OF_SCOPE.
+domain_owner: llm
+
+approval:
+  gate_run_id: gate_run_spec13_combat_director_001
+  gate_rule_set_version: "1.0.0"
+  model_revision: "rev-1"
+  approved_by: "human_lead"
+  approved_at: "2026-09-10T22:00:00Z"
+  approval_evidence: "Full test suite passing: 13.T.1-20 functional tests, 13.SEC.1-28 security tests, 13.UI.1-13 frontend tests, regression suites for SPEC 00-12, zero circular dependencies."
+
+contracts:
+  - name: chat-intent-classifier
+    version: v1
+    change: additive
+  - name: skill-registry
+    version: v1
+    change: additive
+  - name: context-manager
+    version: v1
+    change: additive
+  - name: public-activity-contract
+    version: v1
+    change: additive
+  - name: safe-markdown-renderer
+    version: v1
+    change: additive
+
+categories:
+  - api
+  - ui
+  - security
+  - authorization
+  - tool-policy
+  - observability
+
+data_sources:
+  - backend-http-api
+  - project-context-envelope
+  - authoritative-simulation-output
+  - authoritative-mechanical-validator
+
+kg:
+  nodes_added: []
+  nodes_changed: []
+  relationships_added: []
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected:
+    - EXECUTION_BUDGET
+    - NO_INFINITE_LOOP
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed:
+    - "combat_propose_change — strictly proposal-only, never approve or apply"
+    - "combat_verify — authoritative mechanical validation output"
+  policy_changed:
+    - "Tool allowlists enforced per active Agent Skill in SkillRegistry"
+  registry_changed:
+    - "Registered skills: analyze_attack, analyze_balance, find_combo, optimize_combo, diagnose_stun_loop, analyze_counterplay, analyze_frame_advantage, propose_balance_adjustment, validate_proposal, explain_simulation"
+
+authorization:
+  principals_affected:
+    - user
+    - llm
+  workspace_rules_changed:
+    - "Chat turns strictly isolated by (user_id, workspace_id, conversation_id) derived from JWT.sub and workspace ownership"
+
+security:
+  threats_addressed:
+    - "Direct prompt injection attempting to bypass system rules or execute commands"
+    - "Indirect prompt injection embedded in attack names, descriptions, or Unity asset metadata"
+    - "Delimiter escape attempts in textual inputs"
+    - "Tool injection and privilege escalation by LLM"
+    - "Cross-user and cross-workspace conversation context leakage"
+    - "Fabricated SimulationResult and MechanicalValidationResult"
+    - "XSS injection via Markdown rendering and dangerous link protocols"
+    - "Fake execution status messages without actual backend actions"
+  invariants_affected:
+    - "LLM is untrusted for mechanical truth — Mechanical Validator and Simulator are sole authorities"
+    - "Canonical flow: Proposal -> Simulation -> Mechanical Validation -> Spec Validation -> Recommendation"
+    - "Standard OUT_OF_SCOPE response with zero tool calls, zero graph queries, and zero simulations"
+    - "Public activities conceal internal infrastructure details (trace IDs, SQL, Cypher, MCP method names)"
+
+audit:
+  events_added:
+    - "chat_turn_started"
+    - "chat_intent_classified"
+    - "chat_skill_selected"
+    - "chat_tool_executed"
+    - "chat_turn_completed"
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added: []
+  endpoints_changed:
+    - "POST /api/workspaces/:workspace_id/chat — enriched with conversation_id, processing_state, public activities, safe markdown reply, and typed error codes"
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations: []
+
+tests:
+  unit:
+    - backend/tests/unit/llm/spec13-functional.test.ts
+    - backend/tests/unit/llm/spec13-security.test.ts
+  integration:
+    - frontend/tests/director-chat-ui.test.ts
+  property: []
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - "chat_turn_duration_seconds"
+    - "chat_intent_classification_total"
+    - "chat_skill_invocations_total"
+    - "chat_out_of_scope_total"
+  traces:
+    - "chat_turn_process_message"
+  logs:
+    - "chat_processing_event"
+
+rollback: Revert ChatOrchestrator to legacy mock; frontend falls back to basic envelope submission.
+risks: Latency from multi-step simulation and mechanical validation before recommendation; mitigated by context budgets, retry budgets, and public activity status indicators.

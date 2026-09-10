@@ -23,11 +23,17 @@ O sistema dispõe de motores de domínio determinísticos (Rust crates), pipelin
 
 3. **Preservação de Vereditos Mecânicos**: Vereditos do Mechanical Gate (`PASS`, `FAIL`, `BLOCKED`, `STALE`, `BUDGET_EXCEEDED`) retornados por `combat_verify` são preservados integralmente. A LLM não pode fabricar ou sobrescrever esses vereditos.
 
-4. **Apenas Proposição**: A LLM pode propor ChangeSets via `combat_propose_change`, mas NUNCA pode aprovar ou aplicar. O fluxo permanece: LLM propõe → Gateway autoriza → Application valida → Simulator calcula → Mechanical Gate decide → Humano aprova → Application aplica.
+4. **Fluxo Consultivo Canônico (Alinhamento SPEC 13)**:
+   - A LLM atua exclusivamente como assistente de análise no pipeline:
+     `User Request → Skill → Authorized Tools → Proposal → Simulation → Mechanical Validation → Spec Validation → Recommendation`.
+   - NUNCA existe ferramenta `combat_apply_change` ou aprovação direta de mudanças pelo assistente.
+   - Ferramentas autorizadas são restritas por allowlist da Skill ativa (`SkillRegistry`).
+   - Requisições fora de escopo (`OUT_OF_SCOPE`) são rejeitadas imediatamente sem acionar ferramentas ou simulações.
 
-5. **Fallback Gracioso**: Quando `GEMINI_API_KEY` não está configurado ou o `LlmProvider` não é injetado, a rota mantém o mock determinístico do SPEC 10 como fallback — garantindo backward compatibility.
+5. **Fallback Gracioso**: Quando `GEMINI_API_KEY` não está configurado ou o `LlmProvider` não é injetado, a rota mantém o mock determinístico como fallback — garantindo backward compatibility.
 
-6. **Isolamento de Workspace**: Todas as tool calls são estritamente escoped ao `workspace_id` do `LlmPromptContextEnvelope`.
+6. **Isolamento de Workspace e Projeto**: Todas as chamadas são estritamente associadas à identidade `(user_id, workspace_id, conversation_id)` conforme SPECs 12 e 13.
+
 
 ---
 

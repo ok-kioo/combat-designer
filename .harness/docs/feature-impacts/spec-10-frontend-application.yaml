@@ -24,6 +24,9 @@ contracts:
   - name: workspace-api-routes
     version: v1
     change: additive
+  - name: auth-session-ui
+    version: v1
+    change: additive
 
 categories:
   - ui

@@ -22,7 +22,7 @@ export class GatewayWorkspaceGuard {
     }
 
     // Check principal's authorized workspaces
-    if (!principal.authorized_workspaces.includes(workspaceId)) {
+    if (!principal.authorized_workspaces.includes(workspaceId) && !principal.authorized_workspaces.includes("*")) {
       throw new McpError(
         "UNAUTHORIZED",
         `Principal '${principal.principal_id}' is not authorized to access workspace '${workspaceId}'.`

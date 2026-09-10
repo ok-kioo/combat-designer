@@ -36,6 +36,10 @@ A plataforma estabelece uma fronteira não negociável entre Product e Operation
    - O domínio e a aplicação continuam produzindo o mesmo resultado determinístico mesmo sob pane total do coletor ou exportadores de telemetria.
 4. **Cardinality Protection**:
    - Identificadores individuais (`trace_id`, `span_id`, `request_id`, `correlation_id`, `attack_id`, `changeset_id`, `simulation_id`, `gate_run_id`, `event_id`) são estritamente proibidos como labels de métricas.
+5. **Chat Interface Isolation (SPEC 13)**:
+   - Dados de observabilidade (`trace_id`, `span_id`, stack traces, SQL, Cypher, internal network addresses) são estritamente isolados da experiência conversacional do usuário no Combat Director.
+   - O chat reporta apenas atividades públicas humanizadas (`PublicActivity`) e erros tipados controlados (`PublicChatErrorCode`).
+
 
 ---
 

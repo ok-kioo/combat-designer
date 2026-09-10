@@ -1,13 +1,13 @@
-feature_id: authentication-tenant-security-012
-title: JWT authentication + real workspace membership, replacing self-declared workspace header
+feature_id: authentication-project-security-012
+title: JWT authentication and user-owned combat projects
 owner: Implementation Agent
 status: verified
-intent: Introduzir uma fonte real de identidade (usuário autenticado via credenciais próprias com JWT e refresh tokens rotacionados) e derivar toda autorização de workspace a partir dela, eliminando o bypass de tenant e impondo fail-closed por padrão.
+intent: Introduzir autenticação real baseada em username, password (Argon2id), JWT access token e refresh token rotacionável, substituindo WorkspaceMembership por propriedade direta de projetos (User 1 --- N Workspace).
 non_goals:
   - SSO/OAuth com provedores externos nesta versão (v1).
   - Multi-factor authentication.
-  - Permissões granulares finas por recurso (roles owner/editor/viewer cobrem v1).
-domain_owner: workspace
+  - Colaboração multiusuário, organizações, roles ou memberships na v1.
+domain_owner: authentication
 
 approval:
   gate_run_id: gate_run_spec12_auth_001
@@ -15,13 +15,13 @@ approval:
   model_revision: "rev-1"
   approved_by: "usr-developer-default"
   approved_at: "2026-09-10T04:20:00Z"
-  approval_evidence: "Unit tests, integration tests for fail-closed tenant isolation, token rotation, family reuse revocation, and module boundaries passing."
+  approval_evidence: "Unit tests (password-hasher, token-service) and integration tests for fail-closed direct project ownership, token rotation, family reuse revocation, and module boundaries passing."
 
 contracts:
   - name: user
     version: v1
     change: additive
-  - name: workspace-membership
+  - name: workspace
     version: v1
     change: additive
   - name: refresh-token
@@ -64,24 +64,24 @@ gateway:
   tools_changed:
     - "GatewayAuthenticator.authenticate"
   policy_changed:
-    - "Authorization: Bearer <jwt> substitui x-authorized-workspaces; GatewayAuthenticator passa a verificar assinatura, não só forma"
+    - "Authorization: Bearer <jwt> substitui x-authorized-workspaces; GatewayAuthenticator deriva principal_id exclusivamente de JWT sub"
   registry_changed: []
 
 authorization:
   principals_affected:
     - user
-    - workspace_member
   workspace_rules_changed:
-    - "isWorkspaceAuthorized deriva de JWT verificado + WorkspaceMembership; fail-closed por padrão"
+    - "Workspace.owner_user_id === authenticated_user.id; fail-closed por padrão"
+    - "isWorkspaceAuthorized deriva de JWT verificado + WorkspaceAuthorizationPort"
 
 security:
   threats_addressed:
     - "corrige bypass de tenant isolation: default-allow quando header ausente"
     - "reutilização de refresh token roubado dispara revogação de família"
-    - "timing attacks em verificação de senhas (mitigado com timingSafeEqual)"
+    - "timing attacks em verificação de senhas (mitigado com timingSafeEqual e Argon2id)"
   invariants_affected:
-    - "fail-closed por padrão: sem token ou sem membership retorna 401/403"
-    - "senhas salteadas com PBKDF2/scrypt e comparadas em tempo constante"
+    - "fail-closed por padrão: sem token ou sem propriedade retorna 401/403"
+    - "senhas com Argon2id com parâmetros configuráveis e comparadas em tempo constante"
     - "tokens sensíveis e senhas redactados de toda telemetria e logs"
 
 audit:
@@ -105,15 +105,18 @@ api:
     - "POST /api/auth/refresh"
     - "POST /api/auth/logout"
     - "GET /api/auth/me"
+    - "POST /api/workspaces"
+    - "GET /api/workspaces"
+    - "GET /api/workspaces/:workspace_id"
   endpoints_changed:
-    - "ALL /api/workspaces/:workspace_id/* require verified Bearer token or authorized workspace membership"
+    - "ALL /api/workspaces/:workspace_id/* require verified Bearer token and owner_user_id authorization"
 
 persistence:
   postgres_migrations:
     - "create table users"
-    - "create table workspace_memberships"
+    - "create table workspaces"
     - "create table refresh_tokens"
-    - "add owner constraint on workspaces"
+    - "add owner_user_id foreign key constraint on workspaces"
   neo4j_migrations: []
 
 tests:
@@ -124,7 +127,7 @@ tests:
     - "backend/tests/integration/api/auth-tenant-security.test.ts"
   property: []
   fixtures:
-    - "user sem membership tentando acessar workspace de outro usuário"
+    - "user sem propriedade tentando acessar workspace de outro usuário"
   e2e: []
   gateway: []
 
@@ -141,4 +144,4 @@ observability:
     - "auth_reuse_revocation"
 
 rollback: "Reverter exige reintroduzir o header legado; planejar migração controlada de clientes para Bearer token."
-risks: "Maior superfície de ataque em endpoints de login/refresh; mitigado com rate limits, hashes seguros, e fail-closed por padrão."
+risks: "Maior superfície de ataque em endpoints de login/refresh; mitigado com rate limits, hashes Argon2id seguros, e fail-closed por padrão."

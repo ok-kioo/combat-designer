@@ -29,15 +29,11 @@ export {
   type User,
   UserPublicSchema,
   type UserPublic,
-  WorkspaceMembershipSchema,
-  type WorkspaceMembership,
   RefreshTokenSchema,
   type RefreshToken,
-  type WorkspaceClaim,
   type AccessTokenClaims,
   type AuthTokens,
   type UserRepositoryPort,
-  type WorkspaceMembershipRepositoryPort,
   type RefreshTokenRepositoryPort,
   hashPassword,
   verifyPassword,
@@ -46,10 +42,12 @@ export {
   DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
   DEFAULT_REFRESH_TOKEN_TTL_DAYS,
   AuthService,
+  AuthRateLimiter,
   type RegisterInput,
   type LoginInput,
   AuthController,
 } from "./modules/auth/index.js";
+export * from "./infrastructure/provider/workspace/in-memory-workspace-repository.js";
 
 // Infrastructure Middleware
 export * from "./infrastructure/middleware/index.js";

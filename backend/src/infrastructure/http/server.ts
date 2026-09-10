@@ -29,8 +29,12 @@ import {
   AuthMiddleware,
   AuthController,
   InMemoryUserRepository,
-  InMemoryWorkspaceMembershipRepository,
   InMemoryRefreshTokenRepository,
+  InMemoryWorkspaceRepository,
+  WorkspaceAuthorizationService,
+  type WorkspaceRepositoryPort,
+  type WorkspaceAuthorizationPort,
+  type Workspace,
 } from "../../index.js";
 
 export interface WorkspaceState {
@@ -64,6 +68,8 @@ export interface ApiServerConfig {
   changesetRepo?: ChangeSetRepositoryPort;
   llmProvider?: LlmProvider;
   authService?: AuthService;
+  workspaceRepo?: WorkspaceRepositoryPort;
+  workspaceAuthorizationPort?: WorkspaceAuthorizationPort;
   allowLegacyHeader?: boolean;
 }
 
@@ -84,6 +90,8 @@ export class ApiServer {
   public readonly authService: AuthService;
   public readonly authMiddleware: AuthMiddleware;
   public readonly authController: AuthController;
+  public readonly workspaceRepo: WorkspaceRepositoryPort;
+  public readonly workspaceAuthorizationPort: WorkspaceAuthorizationPort;
   public readonly allowLegacyHeader: boolean;
   private readonly workspaceStates = new Map<string, WorkspaceState>();
   private readonly changesetStore = new Map<string, Map<string, ChangeSetProposal>>();
@@ -102,16 +110,19 @@ export class ApiServer {
     this.changesetRepo = config.changesetRepo;
     this.allowLegacyHeader = config.allowLegacyHeader ?? true;
 
+    this.workspaceRepo = config.workspaceRepo ?? new InMemoryWorkspaceRepository();
+    this.workspaceAuthorizationPort =
+      config.workspaceAuthorizationPort ?? new WorkspaceAuthorizationService(this.workspaceRepo);
+
     if (config.authService) {
       this.authService = config.authService;
     } else {
       const userRepo = new InMemoryUserRepository();
-      const membershipRepo = new InMemoryWorkspaceMembershipRepository();
       const tokenRepo = new InMemoryRefreshTokenRepository();
-      this.authService = new AuthService(userRepo, membershipRepo, tokenRepo);
+      this.authService = new AuthService(userRepo, tokenRepo, this.workspaceRepo);
     }
-    this.authMiddleware = new AuthMiddleware(this.authService);
-    this.authController = new AuthController(this.authService, this.authMiddleware);
+    this.authMiddleware = new AuthMiddleware(this.authService, this.workspaceAuthorizationPort);
+    this.authController = new AuthController(this.authService, this.authMiddleware, this.workspaceRepo);
 
     // Initialize ChatOrchestrator if LLM provider is available
     if (config.llmProvider) {
@@ -188,26 +199,24 @@ export class ApiServer {
     return Array.from(store.values());
   }
 
-  public checkAuthorization(
+  public async checkAuthorization(
     req: http.IncomingMessage,
     workspaceId: string
-  ): { authorized: boolean; status: 401 | 403; code: string; message: string } {
+  ): Promise<{ authorized: boolean; status: 401 | 403; code: string; message: string; userId?: string }> {
     const bearerToken = this.authMiddleware.extractBearerToken(req);
     if (bearerToken) {
       try {
         const claims = this.authService.verifyAccessToken(bearerToken);
-        const isMember = claims.workspaces.some(
-          (w) => w.workspace_id === workspaceId || w.workspace_id === "*"
-        );
-        if (!isMember) {
+        const authResult = await this.workspaceAuthorizationPort.authorize(claims.sub, workspaceId);
+        if (!authResult.authorized) {
           return {
             authorized: false,
             status: 403,
             code: "FORBIDDEN",
-            message: `User '${claims.email}' is not authorized for workspace '${workspaceId}'`,
+            message: authResult.message,
           };
         }
-        return { authorized: true, status: 401, code: "", message: "" };
+        return { authorized: true, status: 401, code: "", message: "", userId: claims.sub };
       } catch (err: any) {
         const isExpired = String(err.message).includes("TOKEN_EXPIRED");
         return {
@@ -250,8 +259,9 @@ export class ApiServer {
     };
   }
 
-  public isWorkspaceAuthorized(req: http.IncomingMessage, workspaceId: string): boolean {
-    return this.checkAuthorization(req, workspaceId).authorized;
+  public async isWorkspaceAuthorized(req: http.IncomingMessage, workspaceId: string): Promise<boolean> {
+    const res = await this.checkAuthorization(req, workspaceId);
+    return res.authorized;
   }
 
   private readRequestBody(
@@ -467,7 +477,7 @@ export class ApiServer {
         try {
           const bodyStr = await this.readRequestBody(req);
           const parsed = JSON.parse(bodyStr);
-          await this.authController.login(parsed, res);
+          await this.authController.login(req, parsed, res);
           span.end("OK");
           return;
         } catch (err: any) {
@@ -505,13 +515,75 @@ export class ApiServer {
         return;
       }
 
+      // 4c. Workspace Collection: POST /api/workspaces and GET /api/workspaces (Spec 12)
+      if (pathname === "/api/workspaces" || pathname === "/api/workspaces/") {
+        const auth = await this.authMiddleware.authenticate(req);
+        if (!auth.authenticated) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+
+        if (method === "GET") {
+          const workspaces = await this.workspaceRepo.findByOwner(auth.context.userId);
+          return finish(200, JSON.stringify(workspaces));
+        }
+
+        if (method === "POST") {
+          try {
+            const bodyStr = await this.readRequestBody(req);
+            const body = JSON.parse(bodyStr || "{}");
+            if (!body.name || typeof body.name !== "string" || body.name.trim() === "") {
+              return finish(400, JSON.stringify({ error: "BAD_REQUEST", message: "Workspace name is required" }));
+            }
+
+            const now = new Date().toISOString();
+            const workspaceId = `ws-${crypto.randomUUID().slice(0, 12)}`;
+            const workspace: Workspace = {
+              id: workspaceId,
+              owner_user_id: auth.context.userId, // always derived from authenticated user, never payload
+              name: body.name.trim(),
+              description: typeof body.description === "string" ? body.description.trim() : undefined,
+              engine: typeof body.engine === "string" ? body.engine.trim() : "unity",
+              engine_version: typeof body.engine_version === "string" ? body.engine_version.trim() : undefined,
+              status: "active",
+              created_at: now,
+              updated_at: now,
+            };
+            await this.workspaceRepo.save(workspace);
+            return finish(201, JSON.stringify(workspace));
+          } catch (err: any) {
+            return finish(400, JSON.stringify({ error: "BAD_REQUEST", message: err.message }));
+          }
+        }
+      }
+
+      // 4d. Single Workspace: GET /api/workspaces/:workspace_id (Spec 12)
+      const singleWorkspaceMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/?$/);
+      if (method === "GET" && singleWorkspaceMatch) {
+        const workspaceId = decodeURIComponent(singleWorkspaceMatch[1]);
+        const auth = await this.authMiddleware.authenticate(req);
+        if (!auth.authenticated) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+
+        const workspace = await this.workspaceRepo.findById(workspaceId);
+        if (!workspace) {
+          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Workspace '${workspaceId}' not found` }));
+        }
+
+        if (workspace.owner_user_id !== auth.context.userId) {
+          return finish(403, JSON.stringify({ error: "FORBIDDEN", message: `User '${auth.context.userId}' is not the owner of workspace '${workspaceId}'` }));
+        }
+
+        return finish(200, JSON.stringify(workspace));
+      }
+
       // 5. Ingestion Delivery: POST /api/workspaces/:workspace_id/bundles
       const bundleMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/bundles\/?$/);
       if (method === "POST" && bundleMatch) {
         const workspaceId = decodeURIComponent(bundleMatch[1]);
 
         // Workspace authorization check (Fail-Closed)
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           this.metrics.record(INGESTION_METRICS.BUNDLE_REJECTED_TOTAL, 1, {
             reason: "unauthorized_workspace",
@@ -671,7 +743,7 @@ export class ApiServer {
         const workspaceId = decodeURIComponent(statusMatch[1]);
 
         // Workspace authorization check (Fail-Closed)
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(
             auth.status,
@@ -690,7 +762,7 @@ export class ApiServer {
       const attacksMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/attacks\/?$/);
       if (method === "GET" && attacksMatch) {
         const workspaceId = decodeURIComponent(attacksMatch[1]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -744,7 +816,7 @@ export class ApiServer {
       if (method === "GET" && attackDetailMatch) {
         const workspaceId = decodeURIComponent(attackDetailMatch[1]);
         const attackId = decodeURIComponent(attackDetailMatch[2]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -782,7 +854,7 @@ export class ApiServer {
       const simMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/simulations\/?$/);
       if (method === "POST" && simMatch) {
         const workspaceId = decodeURIComponent(simMatch[1]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -815,7 +887,7 @@ export class ApiServer {
       const verifyMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/verifications\/?$/);
       if (method === "POST" && verifyMatch) {
         const workspaceId = decodeURIComponent(verifyMatch[1]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -846,7 +918,7 @@ export class ApiServer {
       const changesetsMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/changesets\/?$/);
       if (method === "GET" && changesetsMatch) {
         const workspaceId = decodeURIComponent(changesetsMatch[1]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -858,7 +930,7 @@ export class ApiServer {
       const createChangesetMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/changesets\/?$/);
       if (method === "POST" && createChangesetMatch) {
         const workspaceId = decodeURIComponent(createChangesetMatch[1]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -885,7 +957,7 @@ export class ApiServer {
       if (method === "GET" && singleChangesetMatch) {
         const workspaceId = decodeURIComponent(singleChangesetMatch[1]);
         const changesetId = decodeURIComponent(singleChangesetMatch[2]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -901,7 +973,7 @@ export class ApiServer {
       if (method === "POST" && approveMatch) {
         const workspaceId = decodeURIComponent(approveMatch[1]);
         const changesetId = decodeURIComponent(approveMatch[2]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -923,7 +995,7 @@ export class ApiServer {
       if (method === "POST" && applyMatch) {
         const workspaceId = decodeURIComponent(applyMatch[1]);
         const changesetId = decodeURIComponent(applyMatch[2]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -953,7 +1025,7 @@ export class ApiServer {
       if (method === "POST" && withdrawMatch) {
         const workspaceId = decodeURIComponent(withdrawMatch[1]);
         const changesetId = decodeURIComponent(withdrawMatch[2]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -972,7 +1044,7 @@ export class ApiServer {
       const chatMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/chat\/?$/);
       if (method === "POST" && chatMatch) {
         const workspaceId = decodeURIComponent(chatMatch[1]);
-        const auth = this.checkAuthorization(req, workspaceId);
+        const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
@@ -982,11 +1054,14 @@ export class ApiServer {
 
         const contextEnvelope: ChatContextEnvelope = {
           workspace_id: workspaceId,
+          user_id: (auth as any).userId || (req.headers["x-user-id"] as string) || "user_default",
+          conversation_id: (context?.conversation_id as string) || `conv_${workspaceId}_default`,
           snapshot_hash: context?.snapshot_hash ?? state.latest_snapshot_hash ?? "snapshot_default",
           selected_attack_ids: (context?.selected_attack_ids as string[]) ?? [],
           active_changeset_id: context?.active_changeset_id as string | undefined,
           user_prompt: prompt,
           timestamp: new Date().toISOString(),
+          history: context?.history,
         };
 
         // === LLM Orchestrator Path (when LlmProvider is configured) ===
@@ -994,8 +1069,13 @@ export class ApiServer {
           try {
             const result = await this.chatOrchestrator.processMessage(contextEnvelope);
             return finish(200, JSON.stringify({
+              message_id: result.message_id,
+              conversation_id: result.conversation_id,
               workspace_id: workspaceId,
+              processing_state: result.processing_state,
+              intent: result.intent,
               reply: result.reply,
+              activities: result.activities,
               tool_calls: result.tool_calls,
               proposed_changeset: result.proposed_changeset,
               context_envelope: contextEnvelope,

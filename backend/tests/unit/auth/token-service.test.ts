@@ -5,11 +5,11 @@ describe("TokenService Unit Tests", () => {
   const secret = "test-secret-key-at-least-32-characters-long!";
   const tokenService = new TokenService(secret, 60);
 
-  it("should sign and successfully verify an access token", () => {
+  it("should sign and successfully verify an access token with canonical claims", () => {
     const payload = {
       sub: "usr-123",
-      email: "designer@studio.com",
-      workspaces: [{ workspace_id: "ws-alpha", role: "editor" as const }],
+      username: "combatdesigner",
+      display_name: "Combat Designer",
     };
 
     const token = tokenService.signAccessToken(payload);
@@ -18,23 +18,23 @@ describe("TokenService Unit Tests", () => {
 
     const verified = tokenService.verifyAccessToken(token);
     expect(verified.sub).toBe(payload.sub);
-    expect(verified.email).toBe(payload.email);
-    expect(verified.workspaces).toHaveLength(1);
-    expect(verified.workspaces[0]?.workspace_id).toBe("ws-alpha");
+    expect(verified.username).toBe(payload.username);
+    expect(verified.display_name).toBe(payload.display_name);
+    expect((verified as any).workspaces).toBeUndefined(); // Never contains workspaces
     expect(verified.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
   it("should throw when token signature is tampered", () => {
     const token = tokenService.signAccessToken({
       sub: "usr-safe",
-      email: "safe@studio.com",
-      workspaces: [{ workspace_id: "ws-safe", role: "viewer" as const }],
+      username: "safedesigner",
+      display_name: "Safe Designer",
     });
 
     const parts = token.split(".");
     // Tamper with payload by changing one character
     const tamperedPayload = Buffer.from(
-      JSON.stringify({ sub: "usr-evil", email: "evil@studio.com", workspaces: [{ workspace_id: "ws-safe", role: "owner" }] })
+      JSON.stringify({ sub: "usr-evil", username: "evildesigner", display_name: "Evil Designer" })
     ).toString("base64url");
     const tamperedToken = `${parts[0]}.${tamperedPayload}.${parts[2]}`;
 
@@ -45,8 +45,8 @@ describe("TokenService Unit Tests", () => {
     const shortLivedService = new TokenService(secret, -10); // Expired 10 seconds ago
     const token = shortLivedService.signAccessToken({
       sub: "usr-expired",
-      email: "old@studio.com",
-      workspaces: [],
+      username: "olduser",
+      display_name: "Old User",
     });
 
     expect(() => tokenService.verifyAccessToken(token)).toThrow("TOKEN_EXPIRED");
@@ -62,3 +62,4 @@ describe("TokenService Unit Tests", () => {
     expect(rt1.hash).not.toBe(rt2.hash);
   });
 });
+
