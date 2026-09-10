@@ -18,9 +18,18 @@ export const SIMULATION_METRICS = {
   COUNT: "simulation_count",
   FAILURE_COUNT: "simulation_failure_count",
   BUDGET_EXCEEDED_COUNT: "simulation_budget_exceeded_count",
+  BUDGET_EXCEEDED_TOTAL: "simulation_budget_exceeded_total",
   DURATION_MS: "simulation_duration_ms",
   FRAMES_TOTAL: "simulation_frames_total",
   EVENTS_TOTAL: "simulation_events_total",
+} as const;
+
+export const INGESTION_METRICS = {
+  BUNDLE_RECEIVED_COUNT: "ingestion_bundle_received_count",
+  BUNDLE_REJECTED_TOTAL: "ingestion_bundle_rejected_total",
+  BUNDLE_PROCESSED_COUNT: "ingestion_bundle_processed_count",
+  ASSETS_QUARANTINED_COUNT: "ingestion_assets_quarantined_count",
+  CONFLICTS_TOTAL: "ingestion_conflicts_total",
 } as const;
 
 export const GATE_METRICS = {

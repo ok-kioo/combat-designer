@@ -57,6 +57,7 @@ fn test_04_t_13_max_frames_budget_exceeded() {
         max_events: 10_000,
         max_state_transitions: 5_000,
         max_entities: 32,
+        ..Default::default()
     };
 
     let input = SimulationInput {
@@ -105,6 +106,7 @@ fn test_04_t_14_max_events_and_transitions_exceeded() {
             max_events: 2, // Only allow 2 events
             max_state_transitions: 1000,
             max_entities: 32,
+            ..Default::default()
         };
 
         let inputs = vec![ActorCommand {
@@ -150,6 +152,7 @@ fn test_04_t_14_max_events_and_transitions_exceeded() {
             max_events: 1000,
             max_state_transitions: 1, // Only allow 1 transition
             max_entities: 32,
+            ..Default::default()
         };
 
         let inputs = vec![ActorCommand {
@@ -193,6 +196,7 @@ fn test_04_t_14_max_events_and_transitions_exceeded() {
             max_events: 1000,
             max_state_transitions: 1000,
             max_entities: 3, // Only allow 3 entities, but 5 provided
+            ..Default::default()
         };
 
         let input = SimulationInput {
@@ -213,6 +217,46 @@ fn test_04_t_14_max_events_and_transitions_exceeded() {
                 );
             }
             other => panic!("Expected BudgetExceeded for entities, got {:?}", other),
+        }
+    }
+
+    // Sub-case D: Max iterations (fuel) exceeded
+    {
+        let mut actors = BTreeMap::new();
+        actors.insert(
+            "p1".to_string(),
+            ActorState::new("p1", 1, 100, vec![attack_id.to_string()]),
+        );
+        let mut attacks = BTreeMap::new();
+        attacks.insert(attack_id.to_string(), attack.clone());
+
+        let budget = ExecutionBudget {
+            max_frames: 100,
+            max_events: 1000,
+            max_state_transitions: 1000,
+            max_entities: 32,
+            max_iterations: Some(3), // Fuel limit = 3 iterations
+            ..Default::default()
+        };
+
+        let input = SimulationInput {
+            actors,
+            attacks,
+            inputs: Vec::new(),
+            budget,
+            target_frames: 10,
+        };
+
+        let output = CombatSimulator::simulate(input);
+        match output.status {
+            SimulationStatus::BudgetExceeded { ref reason } => {
+                assert!(
+                    reason.contains("iteration"),
+                    "Expected iteration/fuel limit in reason: {}",
+                    reason
+                );
+            }
+            other => panic!("Expected BudgetExceeded for iterations, got {:?}", other),
         }
     }
 }

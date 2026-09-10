@@ -12,6 +12,8 @@ export interface ExecutionBudget {
   max_events: number;
   max_state_transitions: number;
   max_entities: number;
+  max_iterations?: number;
+  wall_clock_timeout_ms?: number;
 }
 
 export interface SimulationConfig {

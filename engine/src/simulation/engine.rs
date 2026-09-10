@@ -76,6 +76,14 @@ impl CombatSimulator {
                 break;
             }
 
+            // Verify iteration (fuel) budget
+            if let Err(reason) = tracker.record_iteration() {
+                exit_status = SimulationStatus::BudgetExceeded {
+                    reason: reason.to_string(),
+                };
+                break;
+            }
+
             let mut ctx = FrameExecutionContext::new(
                 current_frame,
                 &mut input.actors,

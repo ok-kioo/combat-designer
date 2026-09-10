@@ -13,11 +13,20 @@ pub struct ExecutionBudget {
     pub max_events: usize,
     pub max_state_transitions: usize,
     pub max_entities: usize,
+    #[serde(default)]
+    pub max_iterations: Option<usize>,
+    #[serde(default)]
+    pub wall_clock_timeout_ms: Option<u64>,
 }
 
 impl ExecutionBudget {
     pub fn standard() -> Self {
         Self::default()
+    }
+
+    pub fn with_fuel(mut self, iterations: usize) -> Self {
+        self.max_iterations = Some(iterations);
+        self
     }
 }
 
@@ -28,6 +37,8 @@ impl Default for ExecutionBudget {
             max_events: 10_000,
             max_state_transitions: 5_000,
             max_entities: 32,
+            max_iterations: None,
+            wall_clock_timeout_ms: None,
         }
     }
 }
@@ -38,6 +49,8 @@ pub enum BudgetExceededReason {
     MaxEventsExceeded { current: usize, limit: usize },
     MaxTransitionsExceeded { current: usize, limit: usize },
     MaxEntitiesExceeded { current: usize, limit: usize },
+    MaxIterationsExceeded { current: usize, limit: usize },
+    TimeoutExceeded { timeout_ms: u64 },
 }
 
 impl std::fmt::Display for BudgetExceededReason {
@@ -71,6 +84,20 @@ impl std::fmt::Display for BudgetExceededReason {
                     current, limit
                 )
             }
+            Self::MaxIterationsExceeded { current, limit } => {
+                write!(
+                    f,
+                    "Execution budget exceeded: reached iteration {} (limit {})",
+                    current, limit
+                )
+            }
+            Self::TimeoutExceeded { timeout_ms } => {
+                write!(
+                    f,
+                    "Execution budget exceeded: watchdog timeout {}ms expired",
+                    timeout_ms
+                )
+            }
         }
     }
 }
@@ -82,6 +109,7 @@ pub struct BudgetTracker {
     pub events: usize,
     pub transitions: usize,
     pub entities: usize,
+    pub iterations: usize,
 }
 
 impl BudgetTracker {
@@ -98,7 +126,21 @@ impl BudgetTracker {
             events: 0,
             transitions: 0,
             entities: entity_count,
+            iterations: 0,
         })
+    }
+
+    pub fn record_iteration(&mut self) -> Result<(), BudgetExceededReason> {
+        self.iterations = self.iterations.saturating_add(1);
+        if let Some(max_iter) = self.budget.max_iterations {
+            if self.iterations > max_iter {
+                return Err(BudgetExceededReason::MaxIterationsExceeded {
+                    current: self.iterations,
+                    limit: max_iter,
+                });
+            }
+        }
+        Ok(())
     }
 
     pub fn check_frame_advance(&mut self) -> Result<(), BudgetExceededReason> {

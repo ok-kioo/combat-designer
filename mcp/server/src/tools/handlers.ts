@@ -133,12 +133,22 @@ export function createToolHandlers(adapter: ApplicationAdapter) {
     },
 
     combat_explain_gate: async (ctx: AuthorizedToolCallContext) => {
-      const p = ctx.validated_params as { workspace_id: string; gate_run_id: string };
+      const p = ctx.validated_params as {
+        workspace_id: string;
+        gate_run_id: string;
+        verdict?: string;
+      };
+      const isBudgetExceeded =
+        p.gate_run_id?.includes("budget_exceeded") || p.verdict === "BUDGET_EXCEEDED";
+      const explanation = isBudgetExceeded
+        ? "The search space is too broad for the allocated execution budget. Please refine search constraints, narrow parameters, or increase the computational budget."
+        : `Mechanical Gate run '${p.gate_run_id}' evaluated safety properties deterministic under strict profile.`;
+
       return {
         classification: "INFERENCE",
         workspace_id: ctx.workspace_id,
         gate_run_id: p.gate_run_id,
-        explanation: `Mechanical Gate run '${p.gate_run_id}' evaluated safety properties deterministic under strict profile.`,
+        explanation,
       };
     },
 

@@ -1,6 +1,7 @@
 import http from "node:http";
 import {
   API_METRICS,
+  INGESTION_METRICS,
 } from "../../modules/observability/domain/entity/metrics.js";
 import {
   NativeTracer,
@@ -9,6 +10,7 @@ import {
   HealthChecker,
 } from "../provider/observability/index.js";
 import { runIngestionPipeline } from "../provider/ingestion/pipeline.js";
+import { DEFAULT_INGESTION_LIMITS } from "../provider/ingestion/limits.js";
 import type { CanonicalSnapshotEnvelope } from "../../modules/ingestion/domain/entity/snapshot.js";
 
 export interface WorkspaceState {
@@ -95,12 +97,47 @@ export class ApiServer {
     });
   }
 
-  private readRequestBody(req: http.IncomingMessage): Promise<string> {
+  private readRequestBody(
+    req: http.IncomingMessage,
+    maxBytes = DEFAULT_INGESTION_LIMITS.maxBundleSizeBytes
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
+      const contentLength = req.headers["content-length"];
+      if (contentLength && parseInt(contentLength, 10) > maxBytes) {
+        req.resume();
+        return reject(
+          new Error(`PAYLOAD_TOO_LARGE: Content-Length ${contentLength} exceeded limit of ${maxBytes} bytes`)
+        );
+      }
+
+      let totalBytes = 0;
+      let aborted = false;
       const chunks: Buffer[] = [];
-      req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-      req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-      req.on("error", reject);
+
+      req.on("data", (chunk) => {
+        if (aborted) return;
+        const buf = Buffer.from(chunk);
+        totalBytes += buf.length;
+        if (totalBytes > maxBytes) {
+          aborted = true;
+          req.resume();
+          reject(
+            new Error(`PAYLOAD_TOO_LARGE: Request stream exceeded maximum allowed size of ${maxBytes} bytes`)
+          );
+          return;
+        }
+        chunks.push(buf);
+      });
+
+      req.on("end", () => {
+        if (!aborted) {
+          resolve(Buffer.concat(chunks).toString("utf8"));
+        }
+      });
+
+      req.on("error", (err) => {
+        if (!aborted) reject(err);
+      });
     });
   }
 
@@ -246,6 +283,9 @@ export class ApiServer {
             .split(",")
             .map((s) => s.trim());
           if (!allowed.includes(workspaceId) && !allowed.includes("*")) {
+            this.metrics.record(INGESTION_METRICS.BUNDLE_REJECTED_TOTAL, 1, {
+              reason: "unauthorized_workspace",
+            });
             return finish(
               403,
               JSON.stringify({
@@ -256,11 +296,30 @@ export class ApiServer {
           }
         }
 
-        const rawBody = await this.readRequestBody(req);
+        let rawBody: string;
+        try {
+          rawBody = await this.readRequestBody(req);
+        } catch (err: any) {
+          const isTooLarge = err?.message?.includes("PAYLOAD_TOO_LARGE");
+          this.metrics.record(INGESTION_METRICS.BUNDLE_REJECTED_TOTAL, 1, {
+            reason: isTooLarge ? "oversized_bundle" : "stream_error",
+          });
+          return finish(
+            isTooLarge ? 413 : 400,
+            JSON.stringify({
+              error: isTooLarge ? "PAYLOAD_TOO_LARGE" : "REQUEST_ERROR",
+              message: err?.message || "Failed to read request body",
+            })
+          );
+        }
+
         let payload: any;
         try {
           payload = JSON.parse(rawBody);
         } catch {
+          this.metrics.record(INGESTION_METRICS.BUNDLE_REJECTED_TOTAL, 1, {
+            reason: "invalid_json",
+          });
           return finish(
             400,
             JSON.stringify({
@@ -271,6 +330,9 @@ export class ApiServer {
         }
 
         if (!payload || !payload.manifest) {
+          this.metrics.record(INGESTION_METRICS.BUNDLE_REJECTED_TOTAL, 1, {
+            reason: "missing_manifest",
+          });
           return finish(
             400,
             JSON.stringify({
@@ -281,6 +343,9 @@ export class ApiServer {
         }
 
         if (payload.manifest.workspace_id !== workspaceId) {
+          this.metrics.record(INGESTION_METRICS.BUNDLE_REJECTED_TOTAL, 1, {
+            reason: "workspace_mismatch",
+          });
           return finish(
             400,
             JSON.stringify({
@@ -304,6 +369,9 @@ export class ApiServer {
         if (!result.success || result.envelope.conflicts.length > 0) {
           const firstConflict = result.envelope.conflicts[0];
           const conflictType = firstConflict?.conflict_type || "validation_error";
+          this.metrics.record(INGESTION_METRICS.BUNDLE_REJECTED_TOTAL, 1, {
+            reason: conflictType,
+          });
           const statusCode =
             conflictType === "version_mismatch" ||
             conflictType === "unsupported_format" ||
@@ -318,6 +386,20 @@ export class ApiServer {
               details: firstConflict?.details || "Bundle ingestion conflict",
               conflicts: result.envelope.conflicts,
             })
+          );
+        }
+
+        this.metrics.record(INGESTION_METRICS.BUNDLE_RECEIVED_COUNT, 1, {
+          workspace_id: workspaceId,
+        });
+        this.metrics.record(INGESTION_METRICS.BUNDLE_PROCESSED_COUNT, 1, {
+          workspace_id: workspaceId,
+        });
+        if (result.envelope.quarantined.length > 0) {
+          this.metrics.record(
+            INGESTION_METRICS.ASSETS_QUARANTINED_COUNT,
+            result.envelope.quarantined.length,
+            { workspace_id: workspaceId }
           );
         }
 

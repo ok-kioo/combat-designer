@@ -1,0 +1,132 @@
+feature_id: ingestion-security-001
+title: Ingestion Security and Execution Limits
+owner: Implementation Agent
+status: verified
+intent: Enforce multi-layer upload limits (DoS/JSON bomb protection), two-layer validation (Layer 1 Envelope schema vs Layer 2 per-asset quarantine), text sanitization defense in depth with untrusted_text propagation, strict workspace isolation across all queries, and execution budget (iterations/fuel and timeouts) with explainable BUDGET_EXCEEDED verdicts.
+non_goals:
+  - No wall clock time inside deterministic frame simulation loop.
+  - No silent truncation or conversion of oversized or malformed payloads.
+  - No bypass of mechanical gate or LLM hallucination of PASS.
+domain_owner: ingestion
+
+approval:
+  gate_run_id: gate_run_spec09_security_001
+  gate_rule_set_version: "1.0.0"
+  model_revision: "rev-1"
+  approved_by: "human_lead"
+  approved_at: "2026-09-09T23:40:00Z"
+  approval_evidence: "Automated regression tests, unit/integration security limits tests, and FIC schema validation all passing."
+
+contracts:
+  - name: export-bundle-manifest
+    version: v1
+    change: additive
+  - name: simulation-request
+    version: v2
+    change: additive
+  - name: gate-result
+    version: v2
+    change: additive
+
+categories:
+  - ingestion
+  - security
+  - simulation
+  - verification
+  - observability
+
+data_sources:
+  - export-bundle-upload
+
+kg:
+  nodes_added: []
+  nodes_changed:
+    - Attack
+    - Hitbox
+    - CancelRule
+  relationships_added: []
+
+simulation:
+  states_added:
+    - BUDGET_EXCEEDED
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added:
+    - EXECUTION_BUDGET
+  changed: []
+  affected:
+    - NO_INFINITE_LOOP
+    - MAX_SUSTAINED_DPS
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed:
+    - combat_explain_gate
+  policy_changed: []
+  registry_changed: []
+
+authorization:
+  principals_affected:
+    - human
+    - llm
+    - service
+    - system
+  workspace_rules_changed:
+    - "Strict workspace isolation enforced on all database, graph queries, and MCP tool calls"
+
+security:
+  threats_addressed:
+    - "DoS and JSON bomb via oversized payloads and deep nesting"
+    - "Indirect prompt injection via untrusted asset text"
+    - "Cross-tenant data leakage via colliding asset identifiers"
+    - "Unbounded simulation search space exhaustion"
+  invariants_affected:
+    - "Two-layer validation: Envelope rejection vs per-asset quarantine"
+    - "Untrusted text propagation to Knowledge Graph nodes"
+    - "Execution budget exhaustion produces explicit BUDGET_EXCEEDED status"
+
+audit:
+  events_added:
+    - "bundle_upload_rejected"
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added: []
+  endpoints_changed:
+    - "POST /api/workspaces/:workspace_id/bundles"
+
+persistence:
+  postgres_migrations:
+    - "Mandatory workspace_id column across all platform entities"
+  neo4j_migrations:
+    - "Indexed workspace_id and raw_label/untrusted_text on Attack, Hitbox, CancelRule"
+
+tests:
+  unit:
+    - backend/tests/integration/security-limits/security-limits.test.ts
+  integration:
+    - backend/tests/integration/security-limits/security-limits.test.ts
+  property:
+    - engine/tests/simulation_property_tests.rs
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - "ingestion_bundle_rejected_total"
+    - "simulation_budget_exceeded_total"
+  traces: []
+  logs:
+    - "http_request_finished"
+
+rollback: Revert git commit and restore previous gate and envelope limit thresholds.
+risks: False rejection of unusually large legitimate assets; mitigated by configurable deployment limits.

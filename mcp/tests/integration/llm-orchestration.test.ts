@@ -173,4 +173,43 @@ describe("SPEC 06 — LLM Orchestration Tests (06.T.13 - 06.T.20)", () => {
       env.server.orchestrator.validateLlmClaim("PASS", gateResult)
     ).toThrow(/Fabricated verdict rejected/);
   });
+
+  it("09.T.MCP: BUDGET_EXCEEDED verdict is preserved and combat_explain_gate returns actionable guidance", async () => {
+    env.gatePort.customVerdict = "BUDGET_EXCEEDED";
+    const gateResult = await env.gatePort.verify(
+      {
+        workspace_id: "ws-alpha",
+        project_id: "p1",
+        project_revision: "rev-1",
+        canonical_snapshot_hash: "snap_1",
+        simulation_input_hash: "sim_1",
+        simulation_input: {},
+        verification_profile: { kind: "strict" } as any,
+        verification_budget: {} as any,
+        rule_set_version: "1.0",
+        verifier_version: "1.0",
+      },
+      {} as any
+    );
+
+    const preserved = env.server.orchestrator.preserveMechanicalVerdict(gateResult);
+    expect(preserved).toBe("BUDGET_EXCEEDED");
+
+    expect(() =>
+      env.server.orchestrator.validateLlmClaim("PASS", gateResult)
+    ).toThrow(/Fabricated verdict rejected/);
+
+    const explainResult = await env.gateway.execute(
+      env.humanLead,
+      "combat_explain_gate",
+      {
+        workspace_id: "ws-alpha",
+        gate_run_id: "gate_run_budget_exceeded_999",
+      }
+    );
+
+    expect((explainResult.data as any).explanation).toContain(
+      "The search space is too broad for the allocated execution budget"
+    );
+  });
 });

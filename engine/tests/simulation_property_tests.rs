@@ -21,6 +21,7 @@ proptest! {
             max_events: 100_000,
             max_state_transitions: 100_000,
             max_entities: 32,
+            ..Default::default()
         };
 
         let mut tracker = BudgetTracker::new(budget, 2).unwrap();
@@ -38,6 +39,7 @@ proptest! {
             max_events: limit,
             max_state_transitions: 100_000,
             max_entities: 32,
+            ..Default::default()
         };
 
         let mut tracker = BudgetTracker::new(budget, 2).unwrap();
