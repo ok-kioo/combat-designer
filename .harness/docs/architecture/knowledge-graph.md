@@ -5,7 +5,7 @@
 O **Knowledge Graph (Neo4j)** no ecossistema Combat Designer atua estritamente como **camada de projeção, indexação relacional e descoberta estrutural**.
 
 ### Invariantes Fundamentais:
-1. **Nunca é autoridade mecânica**: O grafo não resolve física, não calcula colisões no tempo, não decide interrupções e não avalia o Mechanical Gate. Toda autoridade canônica pertence ao `engine/combat-domain` e ao determinismo de snapshots.
+1. **Nunca é autoridade mecânica**: O grafo não resolve física, não calcula colisões no tempo, não decide interrupções e não avalia diagnósticos mecânicos ou validação de harness. Toda autoridade canônica pertence ao modelo de combate determinístico.
 2. **Separação estrita de domínios**: `engine/combat-domain` não possui referências ou dependências para Neo4j, Cypher, HTTP ou drivers. O adaptador reside exclusivamente em `backend/infrastructure/neo4j/`.
 3. **Workspace Isolation Transversal**:
    - Todo nó e todo relacionamento persistem `workspace_id`.

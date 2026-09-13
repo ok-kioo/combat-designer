@@ -31,26 +31,12 @@ export class PolicyEngine {
       }
     }
 
-    // Invariant GW-I06: LLM default policy denies apply & admin & approve
+    // Invariant GW-I06: LLM default policy denies admin & write
     if (principal.principal_type === "llm") {
-      if (tool.capability_required === "changeset:apply" || tool.mutability === "WRITE") {
+      if ((tool.mutability as string) === "WRITE" || tool.capability_required.startsWith("admin:")) {
         return {
           allowed: false,
-          reason: "LLM default policy: changeset:apply is strictly DENIED.",
-          code: "POLICY_DENIED",
-        };
-      }
-      if (tool.capability_required === "changeset:approve") {
-        return {
-          allowed: false,
-          reason: "LLM cannot approve changesets. Human approval is strictly required.",
-          code: "POLICY_DENIED",
-        };
-      }
-      if (tool.capability_required.startsWith("admin:")) {
-        return {
-          allowed: false,
-          reason: "LLM default policy: admin:* capabilities are strictly DENIED.",
+          reason: `LLM default policy: ${tool.capability_required} is strictly DENIED.`,
           code: "POLICY_DENIED",
         };
       }

@@ -1,6 +1,6 @@
 # Spec 09 — Ingestion Security and Execution Limits
 
-Origem: `regras/propostas/2026-09-09-web-platform-and-security.md`, itens 3, 4, 5, 6, 7
+Origem: `.harness/docs/project-context/2026-09-09-web-platform-and-security-decisions.md`, itens 3, 4, 5, 6, 7
 (ACCEPTED / ACCEPTED-adaptado). Este spec complementa, e não substitui, as defesas já
 existentes em specs/02 (QUARANTINED por asset) e specs/06 (`untrusted_text`, proibição de
 `propose_changeset` baseado só em texto não confiável).
@@ -85,16 +85,15 @@ Estouro de `ExecutionBudget` interrompe a execução e retorna, em vez de `Simul
 completo, um resultado `BUDGET_EXCEEDED` contendo o que foi explorado até o corte (parcial,
 rotulado como tal) e a razão (`timeout` ou `fuel_exhausted`).
 
-### specs/05 — novo resultado não-PASS
+### specs/05 — status de execução de análise
 
-`BUDGET_EXCEEDED` é adicionado aos Estados possíveis de `run_gate`/busca, distinto de
+`BUDGET_EXCEEDED` é um `AnalysisStatus` de busca e diagnóstico, distinto de
 `ERROR`: `ERROR` significa falha inesperada (bug); `BUDGET_EXCEEDED` significa espaço de
-busca maior que o orçamento configurado, uma condição esperada e tratável. Nenhum dos dois é
-PASS.
+busca maior que o orçamento computacional configurado, uma condição esperada e tratável.
 
 O MCP (specs/06) deve devolver `BUDGET_EXCEEDED` ao LLM como um resultado explicável ("o
-espaço de busca é muito amplo, refine as restrições"), nunca reinterpretado como PASS,
-FAIL ou omitido da resposta ao designer.
+espaço de busca é muito amplo, refine as restrições"), permitindo ao assistente orientar
+o designer sobre como estreitar parâmetros.
 
 ## 6. Enforcement em camadas
 
@@ -107,21 +106,21 @@ MCP Gateway
    │  (security/infra concern, independent of gameplay)
    ↓
 Application Layer
-   │  business validation, changeset size limits, query complexity limits
+   │  business validation, request size limits, query complexity limits
    │  (application concern)
    ↓
 Simulator
    │  ExecutionBudget (wall_clock_timeout_ms, max_iterations)
    │  (deterministic execution concern — frame clock is integer, no system clock)
    ↓
-Mechanical Gate
-   │  gate profile limits (fast/strict/research)
-   │  (verification concern)
+Combat Analysis
+   │  AnalysisBudget (max_events, max_states, max_cycles)
+   │  (diagnostic/search complexity concern — specs/05)
 ```
 
 O Gateway impõe limites de **request/tool execution** (segurança de fronteira).
 O Simulator impõe limites de **execução determinística** (specs/04).
-O Gate impõe limites de **verificação** (specs/05).
+O Combat Analysis impõe limites de **orçamento de análise diagnóstica** (specs/05).
 
 Esses são independentes: o Gateway pode cortar um request por timeout de segurança sem
 que isso signifique que o Simulator atingiu `BUDGET_EXCEEDED`, e vice-versa.

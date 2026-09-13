@@ -44,53 +44,35 @@ describe("SPEC 06 — Gateway & Server Functional Tests (06.T.1 - 06.T.12)", () 
     expect(data.simulation.final_state_hash).toBeDefined();
   });
 
-  it("06.T.3: authorized verification succeeds and returns authoritative GateResult", async () => {
-    const result = await env.gateway.execute(env.llmDirector, "combat_verify", {
+  it("06.T.3: authorized analysis succeeds and returns authoritative analysis result", async () => {
+    const result = await env.gateway.execute(env.llmDirector, "combat_analyze", {
       workspace_id: "ws-alpha",
-      project_id: "proj-1",
-      project_revision: "rev-1",
-      canonical_snapshot_hash: "snap_hash_1",
-      simulation_input_hash: "sim_hash_1",
-      simulation_input: {
-        workspace_id: "ws-alpha",
-        project_id: "proj-1",
-        model_revision: "rev-1",
-        scenario: { scenario_id: "sc_1", actors: [] },
-        inputs: [],
-        config: { budget: { max_frames: 60, max_events: 100, max_state_transitions: 100, max_entities: 2 }, tick_rate: 60 },
-      },
-      verification_profile: "strict",
-      verification_budget: {
-        max_events: 1000,
-        max_states: 1000,
-        max_cycles: 100,
-        max_steps: 5000,
-      },
-      rule_set_version: "1.0.0",
-      verifier_version: "1.0.0",
+      subject: "Attack Frame Data Analysis",
     });
 
     expect(result.classification).toBe("SIMULATION_RESULT");
     const data = result.data as any;
-    expect(data.source).toBe("mechanical_gate");
-    expect(data.verdict).toBe("PASS");
-    expect(data.gate_result_hash).toBeDefined();
+    expect(data.source).toBe("combat_analysis");
+    expect(data.analysis_id).toBeDefined();
+    expect(data.status).toBe("COMPLETED");
   });
 
   it("06.T.4: unauthorized operation is strictly denied (deny-by-default)", async () => {
-    // LLM trying to apply changeset
+    // Principal without permission trying to call combat_analyze
+    const noPermPrincipal = {
+      ...env.llmDirector,
+      capabilities: ["combat:read" as const],
+    };
     await expect(
-      env.gateway.execute(env.llmDirector, "combat_apply_change", {
+      env.gateway.execute(noPermPrincipal, "combat_analyze", {
         workspace_id: "ws-alpha",
-        changeset_id: "cs-123",
-        approved_by: "llm_director",
-        approved_at: new Date().toISOString(),
+        subject: "Forbidden Analysis",
       })
-    ).rejects.toThrow(/changeset:apply is strictly DENIED/);
+    ).rejects.toThrow();
 
     // Unknown tool
     await expect(
-      env.gateway.execute(env.humanLead, "arbitrary_nonexistent_tool", {
+      env.gateway.execute(env.humanLead, "arbitrary_nonexistent_tool" as any, {
         workspace_id: "ws-alpha",
       })
     ).rejects.toThrow(/Unknown or unregistered tool/);
@@ -170,57 +152,16 @@ describe("SPEC 06 — Gateway & Server Functional Tests (06.T.1 - 06.T.12)", () 
     expect(stored?.applied_at).toBeUndefined();
   });
 
-  it("06.T.10: apply requires valid human approval (APPROVAL_REQUIRED)", async () => {
-    const proposeRes = await env.gateway.execute(env.llmDirector, "combat_propose_change", {
-      workspace_id: "ws-alpha",
-      base_revision: "rev-1",
-      target_revision: "rev-2",
-      mutations: [
-        {
-          type: "attack_damage",
-          attack_id: "atk_light_punch",
-          current_damage: 25,
-          proposed_damage: 30,
-          reason: "Buff damage",
-        },
-      ],
-    });
-    const changesetId = (proposeRes.data as any).proposal.changeset_id;
-
-    const mockSim = await env.simulationPort.simulate({} as any);
-    const mockGate = await env.gatePort.verify(
-      {
-        workspace_id: "ws-alpha",
-        project_id: "p1",
-        project_revision: "rev-1",
-        canonical_snapshot_hash: "snap_1",
-        simulation_input_hash: "sim_1",
-        simulation_input: {},
-        verification_profile: { kind: "strict" } as any,
-        verification_budget: {} as any,
-        rule_set_version: "1.0",
-        verifier_version: "1.0",
-      },
-      mockSim
-    );
-
-    // Attempt apply without approve use case
+  it("06.T.10: direct mutations are rejected as unregistered tools", async () => {
     await expect(
-      env.gateway.execute(env.humanLead, "combat_apply_change", {
+      env.gateway.execute(env.humanLead, "apply_mutation" as any, {
         workspace_id: "ws-alpha",
-        changeset_id: changesetId,
-        current_project_revision: "rev-1",
-        canonical_snapshot_hash: "snap_1",
-        simulation_input_hash: "sim_1",
-        simulation_output: mockSim,
-        gate_result: mockGate,
-        approved_by: "someone",
-        approved_at: new Date().toISOString(),
+        changeset_id: "cs-123",
       })
-    ).rejects.toThrow(/Only 'approved' ChangeSets can be applied/);
+    ).rejects.toThrow(/Unknown or unregistered tool/);
   });
 
-  it("06.T.11: stale apply is rejected (STALE_REVISION)", async () => {
+  it("06.T.11: consultative proposals remain proposed until withdrawn", async () => {
     const proposeRes = await env.gateway.execute(env.llmDirector, "combat_propose_change", {
       workspace_id: "ws-alpha",
       base_revision: "rev-1",
@@ -236,50 +177,11 @@ describe("SPEC 06 — Gateway & Server Functional Tests (06.T.1 - 06.T.12)", () 
       ],
     });
     const changesetId = (proposeRes.data as any).proposal.changeset_id;
+    const found = await env.adapter.getChangeset("ws-alpha", changesetId);
+    expect(found?.status).toBe("proposed");
 
-    const mockSim = await env.simulationPort.simulate({} as any);
-    const mockGate = await env.gatePort.verify(
-      {
-        workspace_id: "ws-alpha",
-        project_id: "p1",
-        project_revision: "rev-1",
-        canonical_snapshot_hash: "snap_1",
-        simulation_input_hash: "sim_1",
-        simulation_input: {},
-        verification_profile: { kind: "strict" } as any,
-        verification_budget: {} as any,
-        rule_set_version: "1.0",
-        verifier_version: "1.0",
-      },
-      mockSim
-    );
-
-    // Approve under rev-1
-    await env.adapter.approveChangeset(
-      env.humanLead,
-      "ws-alpha",
-      changesetId,
-      "rev-1",
-      mockGate,
-      mockSim,
-      "approve"
-    );
-
-    // Project revision advanced from rev-1 to rev-2 before apply
-    await expect(
-      env.gateway.execute(env.humanLead, "combat_apply_change", {
-        workspace_id: "ws-alpha",
-        changeset_id: changesetId,
-        current_project_revision: "rev-2", // Stale!
-        canonical_snapshot_hash: "snap_1",
-        simulation_input_hash: "sim_1",
-        simulation_output: mockSim,
-        gate_result: mockGate,
-        approved_by: env.humanLead.principal_id,
-        approved_at: new Date().toISOString(),
-        approver_principal: env.humanLead,
-      })
-    ).rejects.toThrow(/Revision race detected/);
+    const withdrawn = await env.adapter.withdrawChangeset("ws-alpha", changesetId, "Design pivot");
+    expect(withdrawn.status).toBe("withdrawn");
   });
 
   it("06.T.12: repeated side-effect request is idempotent", async () => {

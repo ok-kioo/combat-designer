@@ -212,6 +212,7 @@ export class DirectorChatController {
     return text
       .replace(/Comando executado\.?/gi, "Análise concluída.")
       .replace(/Alteração aplicada\.?/gi, "Proposta gerada.")
+      .replace(/Gate aprovado\.?/gi, "Validação concluída.")
       .replace(/Projeto atualizado\.?/gi, "Avaliação concluída.");
   }
 
@@ -267,12 +268,15 @@ export class DirectorChatController {
           })
           .join("\n");
 
+        const proposalId = m.proposedChangeset
+          ? (m.proposedChangeset.proposal_id || m.proposedChangeset.changeset_id || m.proposedChangeset.id || "")
+          : "";
         const proposalHtml = m.proposedChangeset
           ? `
-            <div class="changeset-card">
-              <h4>Proposed ChangeSet: <code>${m.proposedChangeset.changeset_id}</code></h4>
+            <div class="proposal-card">
+              <h4>Suggested Adjustment: <code>${proposalId}</code></h4>
               <p>Target Revision: ${m.proposedChangeset.target_revision}</p>
-              <a class="btn btn-sm btn-outline" href="#/changesets/${m.proposedChangeset.changeset_id}">Review Diff →</a>
+              <a class="btn btn-sm btn-outline" href="#/proposals/${proposalId}">Review Diff →</a>
             </div>`
           : "";
 

@@ -155,3 +155,7 @@ staticfiles/
 .directory
 .Trash-*
 .nfs*
+
+# Browser verification artifacts
+frontend/test-results/
+frontend/playwright-report/

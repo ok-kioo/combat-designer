@@ -1,3 +1,10 @@
+# ==============================================================================
+# Feature Impact Contract (FIC): spec-05-combat-analysis-and-diagnostics
+#
+# NOTE: This FIC governs the mechanical analysis and diagnostics engine.
+# In target architecture, runtime analysis produces Finding / AnalysisResult.
+# Legacy Gate contracts are tracked under CODE_LEGACY_RUNTIME_GATE.
+# ==============================================================================
 feature_id: spec-05-mechanical-gate
 title: Mechanical Gate Verification Engine & Application Port
 owner: Implementation Agent

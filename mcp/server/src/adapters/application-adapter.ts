@@ -1,6 +1,6 @@
 import type {
   SimulationPort,
-  MechanicalGatePort,
+  CombatAnalysisPort,
   CombatQueryPort,
   ChangeSetRepositoryPort,
   AttackSummary,
@@ -12,26 +12,24 @@ import {
   searchCombatUseCase,
   getAttackUseCase,
   simulateCombatUseCase,
-  verifyCombatUseCase,
+  analyzeCombatUseCase,
   proposeChangesetUseCase,
   getChangesetUseCase,
   withdrawChangesetUseCase,
-  approveChangesetUseCase,
-  applyChangesetUseCase,
 } from "@combat-designer/backend";
 import type {
   Principal,
   SimulationInput,
   SimulationOutput,
   VerificationRequest,
-  GateResult,
+  CombatAnalysisResult,
   ChangeSetProposal,
   ChangeSetMutation,
 } from "@combat-designer/backend";
 
 export interface ApplicationPortsBundle {
   simulationPort: SimulationPort;
-  gatePort: MechanicalGatePort;
+  analysisPort: CombatAnalysisPort;
   queryPort: CombatQueryPort;
   changesetRepo: ChangeSetRepositoryPort;
 }
@@ -69,8 +67,8 @@ export class ApplicationAdapter {
     return await simulateCombatUseCase(this.ports.simulationPort, input);
   }
 
-  async verify(request: VerificationRequest, precomputedSimulation?: SimulationOutput): Promise<GateResult> {
-    return await verifyCombatUseCase(this.ports.gatePort, this.ports.simulationPort, request, precomputedSimulation);
+  async analyze(request: VerificationRequest, precomputedSimulation?: SimulationOutput): Promise<CombatAnalysisResult> {
+    return await analyzeCombatUseCase(this.ports.analysisPort, this.ports.simulationPort, request, precomputedSimulation);
   }
 
   async proposeChangeset(
@@ -97,49 +95,5 @@ export class ApplicationAdapter {
 
   async withdrawChangeset(workspaceId: string, changesetId: string, reason: string): Promise<ChangeSetProposal> {
     return await withdrawChangesetUseCase(this.ports.changesetRepo, workspaceId, changesetId, reason);
-  }
-
-  async approveChangeset(
-    principal: Principal,
-    workspaceId: string,
-    changesetId: string,
-    currentRevision: string,
-    gateResult: GateResult,
-    simulationOutput: SimulationOutput,
-    decision: "approve" | "reject",
-    rejectionReason?: string
-  ): Promise<ChangeSetProposal> {
-    return await approveChangesetUseCase(this.ports.changesetRepo, principal, {
-      workspace_id: workspaceId,
-      changeset_id: changesetId,
-      current_project_revision: currentRevision,
-      gate_result: gateResult,
-      simulation_output: simulationOutput,
-      decision,
-      rejection_reason: rejectionReason,
-    });
-  }
-
-  async applyChangeset(
-    principal: Principal,
-    workspaceId: string,
-    changesetId: string,
-    currentRevision: string,
-    canonicalSnapshotHash: string,
-    simulationInputHash: string,
-    simulationOutput: SimulationOutput,
-    gateResult: GateResult,
-    approverPrincipal?: Principal
-  ): Promise<ChangeSetProposal> {
-    return await applyChangesetUseCase(this.ports.changesetRepo, principal, {
-      workspace_id: workspaceId,
-      changeset_id: changesetId,
-      current_project_revision: currentRevision,
-      canonical_snapshot_hash: canonicalSnapshotHash,
-      simulation_input_hash: simulationInputHash,
-      simulation_output: simulationOutput,
-      gate_result: gateResult,
-      approver_principal: approverPrincipal,
-    });
   }
 }

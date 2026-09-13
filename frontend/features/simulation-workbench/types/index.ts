@@ -22,9 +22,10 @@ export interface SimulationTimelineEvent {
   details?: Record<string, unknown>;
 }
 
-export interface GateViolation {
-  rule_id: string;
-  severity: "FAIL" | "BLOCK" | "WARN";
+export interface AnalysisFinding {
+  id: string;
+  code: string;
+  severity: "high" | "medium" | "low" | "info";
   message: string;
 }
 
@@ -40,12 +41,12 @@ export interface WorkbenchState {
     state_transitions: number;
     status: string;
   };
-  gateResult?: {
-    gate_run_id: string;
-    verdict: "PASS" | "FAIL" | "BLOCKED" | "STALE" | "BUDGET_EXCEEDED";
-    violations: GateViolation[];
-    checks_count: number;
-    explanation?: string;
+  analysisResult?: {
+    analysis_id: string;
+    status: string;
+    findings: AnalysisFinding[];
+    findings_count: number;
+    summary?: string;
   };
   error?: string;
 }

@@ -6,9 +6,8 @@ import {
   ChangeSetMutationSchema,
   CombatSearchInputSchema,
   CombatSimulateInputSchema,
-  CombatVerifyInputSchema,
+  CombatAnalyzeInputSchema,
   CombatProposeChangeInputSchema,
-  CombatApplyChangeInputSchema,
   CombatIntentSchema,
   ResourceEnvelopeSchema,
   parseResourceUri,
@@ -84,10 +83,9 @@ describe("MCP Shared Contracts", () => {
   it("resolves tool aliases to canonical tool names", () => {
     expect(resolveCanonicalToolName("query_combat")).toBe("combat_search");
     expect(resolveCanonicalToolName("simulate_changeset")).toBe("combat_simulate");
-    expect(resolveCanonicalToolName("run_gate")).toBe("combat_verify");
+    expect(resolveCanonicalToolName("analyze_combat")).toBe("combat_analyze");
     expect(resolveCanonicalToolName("propose_changeset")).toBe("combat_propose_change");
     expect(resolveCanonicalToolName("withdraw_changeset")).toBe("combat_withdraw_change");
-    expect(resolveCanonicalToolName("apply_changeset")).toBe("combat_apply_change");
     expect(resolveCanonicalToolName("combat_search")).toBe("combat_search");
   });
 

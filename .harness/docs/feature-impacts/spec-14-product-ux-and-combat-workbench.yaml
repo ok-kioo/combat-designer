@@ -1,0 +1,165 @@
+feature_id: product-ux-and-combat-workbench-014
+title: Product UX, Navigation, Characters, Combos & Combat Workbench
+owner: Implementation Agent
+status: verified
+intent: Transform Combat Designer from an infrastructure-centric dashboard to an action-combat designer tool centered on projects, characters, attacks, combos, and mechanical analysis recommendations with strict tenant authorization, SQLite chat persistence, and zero internal telemetry leaks.
+non_goals:
+  - No general purpose chatbot functionality.
+  - No direct modification of the Unity project or engine.
+  - No fake UNASSIGNED character nodes in the Knowledge Graph.
+  - No client-side fabricated analysis results treated as authoritative truth.
+  - No display of internal database engines (Postgres, Neo4j) or snapshot hashes in product UI.
+domain_owner: combat
+
+approval:
+  gate_run_id: gate_run_spec14_product_ux_001
+  gate_rule_set_version: "1.0.0"
+  model_revision: "rev-1"
+  approved_by: "human_lead"
+  approved_at: "2026-09-10T23:30:00Z"
+  approval_evidence: "Full test suite passing: UX.WS.1-7, UX.CHAT.1-11, DOMAIN.CHAR.1-8, COMBO.1-12, ONBOARD.1-6, regression suites for SPEC 00-13, zero circular dependencies."
+
+contracts:
+  - name: character-domain-entity
+    version: v1
+    change: additive
+  - name: combo-domain-entity
+    version: v1
+    change: additive
+  - name: analysis-and-recommendation-model
+    version: v1
+    change: additive
+  - name: persistent-chat-storage
+    version: v1
+    change: additive
+  - name: workspace-overview-read-model
+    version: v1
+    change: additive
+
+categories:
+  - api
+  - ui
+  - security
+  - authorization
+  - observability
+
+data_sources:
+  - backend-http-api
+  - sqlite-chat-persistence
+  - canonical-combat-snapshot
+  - knowledge-graph-projection
+  - authoritative-simulation-engine
+
+kg:
+  nodes_added:
+    - Character
+  nodes_changed:
+    - Attack
+  relationships_added:
+    - HAS_ATTACK
+
+simulation:
+  states_added: []
+  transitions_added: []
+  timing_rules_changed: []
+
+gates:
+  added: []
+  changed: []
+  affected:
+    - EXECUTION_BUDGET
+    - NO_INFINITE_LOOP
+
+gateway:
+  capabilities_added: []
+  capabilities_changed: []
+  tools_added: []
+  tools_changed:
+    - "combat_propose_change — proposal only, recommendations delivered via Analysis model"
+  policy_changed:
+    - "Combo queries restricted to character-owned attacks"
+  registry_changed: []
+
+authorization:
+  principals_affected:
+    - user
+    - llm
+  workspace_rules_changed:
+    - "Conversations strictly isolated by (user_id, workspace_id, conversation_id)"
+    - "Workspace management limited to project owner"
+
+security:
+  threats_addressed:
+    - "Cross-user conversation context leakage"
+    - "Cross-character illegal combo creation and sequence poisoning"
+    - "Client fabrication of authoritative analysis results"
+    - "Exposure of internal database topology and cryptographic snapshot hashes"
+    - "Denial of service via unbounded message history viewport growth"
+  invariants_affected:
+    - "LLM is untrusted for mechanical truth — Simulator and Mechanical Validator are sole authorities"
+    - "Knowledge Graph is a queryable projection of the canonical model, not persistent authority"
+    - "Frontend is untrusted for authorization — Backend validates tenancy and ownership fail-closed"
+
+audit:
+  events_added:
+    - "workspace_created"
+    - "workspace_archived"
+    - "character_imported"
+    - "combo_saved"
+    - "analysis_requested"
+    - "recommendation_viewed"
+  events_changed: []
+
+mcp:
+  tools_added: []
+  resources_added: []
+
+api:
+  endpoints_added:
+    - "PUT /api/workspaces/:workspace_id/archive — Archive a project"
+    - "GET /api/workspaces/:workspace_id/characters — List characters"
+    - "GET /api/workspaces/:workspace_id/characters/:character_id — Get character details"
+    - "GET /api/workspaces/:workspace_id/combos — List combos filtered by character"
+    - "POST /api/workspaces/:workspace_id/combos — Save a validated combo"
+    - "GET /api/workspaces/:workspace_id/conversations — List user conversations for workspace"
+    - "POST /api/workspaces/:workspace_id/conversations — Create conversation"
+    - "GET /api/workspaces/:workspace_id/conversations/:conversation_id/messages — Get persistent messages"
+    - "GET /api/workspaces/:workspace_id/overview — Application service returning real KPIs and activity"
+    - "POST /api/workspaces/:workspace_id/analyses — Request mechanical analysis"
+  endpoints_changed:
+    - "POST /api/workspaces/:workspace_id/chat — Persists turn into SQLite and prevents fake execution messages"
+
+persistence:
+  postgres_migrations: []
+  neo4j_migrations:
+    - "CREATE CONSTRAINT FOR (c:Character) REQUIRE (c.workspace_id, c.character_id) IS NODE KEY"
+    - "CREATE (c:Character)-[:HAS_ATTACK]->(a:Attack)"
+
+tests:
+  unit:
+    - backend/tests/unit/domain/character-domain.test.ts
+    - backend/tests/unit/combos/combos.test.ts
+  integration:
+    - frontend/tests/ux-workspace.test.ts
+    - frontend/tests/director-chat-scroll-persistence.test.ts
+    - frontend/tests/onboarding-help.test.ts
+  property: []
+  fixtures: []
+  e2e: []
+  gateway: []
+
+observability:
+  metrics:
+    - "workspace_overview_query_duration_ms"
+    - "combo_creation_total"
+    - "analysis_requests_total"
+  traces:
+    - "workspace_overview_query"
+    - "character_combo_search"
+  logs:
+    - "workspace_archived"
+    - "combo_created"
+    - "analysis_executed"
+
+rollback: Revert UI to Spec 10 shell and restore in-memory chat session.
+risks: Character association schema changes require non-assigned attacks to be explicitly handled as UNASSIGNED without data loss.

@@ -1,31 +1,35 @@
 import { ApiClient, defaultApiClient } from "../../../shared/services/api-client.js";
-import type { ChangeSetProposalView, ChangeSetReviewState, MutationDiffItem } from "../types/index.js";
+import type { ProposalView, ProposalReviewState, MutationDiffItem } from "../types/index.js";
 
-export interface ChangeSetReviewProps {
+export interface ProposalReviewProps {
   workspaceId: string;
   apiClient?: ApiClient;
+  initialProposals?: any[];
+  // CODE_LEGACY_PRODUCT_DIRECTION
   initialChangesets?: any[];
 }
 
-export class ChangeSetReviewController {
+export class ProposalReviewController {
   public readonly workspaceId: string;
   private readonly apiClient: ApiClient;
-  private state: ChangeSetReviewState;
+  private state: ProposalReviewState;
 
-  constructor(props: ChangeSetReviewProps) {
+  constructor(props: ProposalReviewProps) {
     this.workspaceId = props.workspaceId;
     this.apiClient = props.apiClient ?? defaultApiClient;
+    const rawList = props.initialProposals ?? props.initialChangesets ?? [];
     this.state = {
       workspaceId: props.workspaceId,
-      changesets: (props.initialChangesets ?? []).map((cs) => this.mapProposal(cs)),
+      proposals: rawList.map((p) => this.mapProposal(p)),
       isLoading: false,
     };
-    if (this.state.changesets.length > 0) {
-      this.state.selectedChangesetId = this.state.changesets[0].changeset_id;
+    if (this.state.proposals.length > 0) {
+      this.state.selectedProposalId = this.state.proposals[0].id;
     }
   }
 
-  private mapProposal(raw: any): ChangeSetProposalView {
+  private mapProposal(raw: any): ProposalView {
+    const id = raw.id || raw.proposal_id || raw.changeset_id || "prop_unknown";
     const diffs: MutationDiffItem[] = (raw.mutations || []).map((m: any) => {
       if (m.type === "attack_damage") {
         return {
@@ -58,7 +62,9 @@ export class ChangeSetReviewController {
     });
 
     return {
-      changeset_id: raw.changeset_id,
+      id,
+      proposal_id: id,
+      changeset_id: id,
       workspace_id: raw.workspace_id,
       base_revision: raw.base_revision,
       target_revision: raw.target_revision,
@@ -66,94 +72,67 @@ export class ChangeSetReviewController {
       status: raw.status,
       mutations: raw.mutations || [],
       diffs,
-      approved_by: raw.approved_by,
-      approved_at: raw.approved_at,
-      applied_at: raw.applied_at,
       created_at: raw.created_at,
     };
   }
 
-  public getState(): ChangeSetReviewState {
+  public getState(): ProposalReviewState {
     return { ...this.state };
   }
 
-  public async loadChangeSets(): Promise<ChangeSetProposalView[]> {
+  public async loadProposals(): Promise<ProposalView[]> {
     this.state.isLoading = true;
     this.state.error = undefined;
     try {
-      const data = await this.apiClient.getChangeSets(this.workspaceId);
-      this.state.changesets = (data.changesets || []).map((cs) => this.mapProposal(cs));
-      if (!this.state.selectedChangesetId && this.state.changesets.length > 0) {
-        this.state.selectedChangesetId = this.state.changesets[0].changeset_id;
+      const data = await this.apiClient.getProposals(this.workspaceId);
+      const rawList = data.proposals || data.changesets || [];
+      this.state.proposals = rawList.map((p: any) => this.mapProposal(p));
+      if (!this.state.selectedProposalId && this.state.proposals.length > 0) {
+        this.state.selectedProposalId = this.state.proposals[0].id;
       }
       this.state.isLoading = false;
-      return this.state.changesets;
+      return this.state.proposals;
     } catch (err: any) {
       this.state.isLoading = false;
-      this.state.error = err?.message || "Failed to load changesets";
+      this.state.error = err?.message || "Failed to load proposals";
       return [];
     }
   }
 
+  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
+  public async loadChangeSets(): Promise<ProposalView[]> {
+    return this.loadProposals();
+  }
+
+  public selectProposal(id: string): void {
+    this.state.selectedProposalId = id;
+  }
+
+  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
   public selectChangeset(id: string): void {
-    this.state.selectedChangesetId = id;
+    this.selectProposal(id);
   }
 
-  public getSelectedChangeset(): ChangeSetProposalView | undefined {
-    return this.state.changesets.find((c) => c.changeset_id === this.state.selectedChangesetId);
+  public getSelectedProposal(): ProposalView | undefined {
+    return this.state.proposals.find((p) => p.id === this.state.selectedProposalId);
   }
 
-  public async approveChangeset(id: string, approverId = "human_lead"): Promise<ChangeSetProposalView> {
+  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
+  public getSelectedChangeset(): ProposalView | undefined {
+    return this.getSelectedProposal();
+  }
+
+  public async withdrawProposal(id: string, reason?: string): Promise<ProposalView> {
     this.state.isLoading = true;
     this.state.error = undefined;
     try {
-      const res = await this.apiClient.approveChangeSet(this.workspaceId, id, approverId);
-      const updated = this.mapProposal(res.changeset);
-      const idx = this.state.changesets.findIndex((c) => c.changeset_id === id);
+      const res = await this.apiClient.withdrawProposal(this.workspaceId, id, reason);
+      const updated = this.mapProposal(res.proposal || res.changeset || res);
+      const idx = this.state.proposals.findIndex((p) => p.id === id);
       if (idx >= 0) {
-        this.state.changesets[idx] = updated;
+        this.state.proposals[idx] = updated;
       }
-      this.state.actionStatus = `ChangeSet '${id}' approved successfully.`;
-      this.state.isLoading = false;
-      return updated;
-    } catch (err: any) {
-      this.state.isLoading = false;
-      this.state.error = err?.message || "Approval failed";
-      throw err;
-    }
-  }
-
-  public async applyChangeset(id: string, gateResult: any): Promise<ChangeSetProposalView> {
-    this.state.isLoading = true;
-    this.state.error = undefined;
-    try {
-      const res = await this.apiClient.applyChangeSet(this.workspaceId, id, gateResult);
-      const updated = this.mapProposal(res.changeset);
-      const idx = this.state.changesets.findIndex((c) => c.changeset_id === id);
-      if (idx >= 0) {
-        this.state.changesets[idx] = updated;
-      }
-      this.state.actionStatus = `ChangeSet '${id}' applied to canonical state.`;
-      this.state.isLoading = false;
-      return updated;
-    } catch (err: any) {
-      this.state.isLoading = false;
-      this.state.error = err?.message || "Application failed";
-      throw err;
-    }
-  }
-
-  public async withdrawChangeset(id: string, reason?: string): Promise<ChangeSetProposalView> {
-    this.state.isLoading = true;
-    this.state.error = undefined;
-    try {
-      const res = await this.apiClient.withdrawChangeSet(this.workspaceId, id, reason);
-      const updated = this.mapProposal(res.changeset);
-      const idx = this.state.changesets.findIndex((c) => c.changeset_id === id);
-      if (idx >= 0) {
-        this.state.changesets[idx] = updated;
-      }
-      this.state.actionStatus = `ChangeSet '${id}' withdrawn.`;
+      this.state.actionStatus = `Proposal '${id}' withdrawn.`;
       this.state.isLoading = false;
       return updated;
     } catch (err: any) {
@@ -163,22 +142,27 @@ export class ChangeSetReviewController {
     }
   }
 
+  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
+  public async withdrawChangeset(id: string, reason?: string): Promise<ProposalView> {
+    return this.withdrawProposal(id, reason);
+  }
+
   public renderModel() {
-    const selected = this.getSelectedChangeset();
+    const selected = this.getSelectedProposal();
     return {
       column: "left" as const,
-      view: "changesets" as const,
+      view: "proposals" as const,
       workspaceId: this.workspaceId,
-      totalCount: this.state.changesets.length,
-      selectedChangesetId: this.state.selectedChangesetId,
-      selectedChangeset: selected ?? null,
-      changesets: this.state.changesets.map((c) => ({
-        id: c.changeset_id,
-        targetRevision: c.target_revision,
-        status: c.status,
-        proposedBy: c.proposed_by,
-        mutationsCount: c.mutations.length,
-        isSelected: c.changeset_id === this.state.selectedChangesetId,
+      totalCount: this.state.proposals.length,
+      selectedProposalId: this.state.selectedProposalId,
+      selectedProposal: selected ?? null,
+      proposals: this.state.proposals.map((p) => ({
+        id: p.id,
+        targetRevision: p.target_revision,
+        status: p.status,
+        proposedBy: p.proposed_by,
+        mutationsCount: p.mutations.length,
+        isSelected: p.id === this.state.selectedProposalId,
       })),
       actionStatus: this.state.actionStatus,
       isLoading: this.state.isLoading,
@@ -188,7 +172,7 @@ export class ChangeSetReviewController {
 
   public renderHtml(): string {
     const model = this.renderModel();
-    const sel = model.selectedChangeset;
+    const sel = model.selectedProposal;
 
     const diffRows = sel?.diffs
       .map(
@@ -205,23 +189,23 @@ export class ChangeSetReviewController {
       .join("\n") ?? "<p>No mutations in proposal.</p>";
 
     return `
-      <section class="changeset-review" data-workspace="${model.workspaceId}">
+      <section class="proposal-review" data-workspace="${model.workspaceId}">
         <header class="review-header">
-          <h2>ChangeSet Review (${model.totalCount})</h2>
+          <h2>Suggested Adjustments & Proposals (${model.totalCount})</h2>
           ${model.actionStatus ? `<div class="alert alert-info">${model.actionStatus}</div>` : ""}
         </header>
 
         <div class="review-grid">
-          <div class="changesets-sidebar">
+          <div class="proposals-sidebar">
             <h3>Proposals</h3>
-            <ul class="changeset-nav">
-              ${model.changesets
+            <ul class="proposal-nav">
+              ${model.proposals
                 .map(
-                  (c) => `
-                <li class="${c.isSelected ? "active" : ""}">
-                  <a href="#${c.id}">
-                    <strong>${c.id}</strong> [${c.status}]
-                    <small>→ ${c.targetRevision} (${c.mutationsCount} mutations)</small>
+                  (p) => `
+                <li class="${p.isSelected ? "active" : ""}">
+                  <a href="#${p.id}">
+                    <strong>${p.id}</strong> [${p.status}]
+                    <small>→ ${p.targetRevision} (${p.mutationsCount} mutations)</small>
                   </a>
                 </li>`
                 )
@@ -229,23 +213,32 @@ export class ChangeSetReviewController {
             </ul>
           </div>
 
-          <div class="changeset-detail-panel">
+          <div class="proposal-details">
             ${
               sel
-                ? `<h3>Proposal: ${sel.changeset_id}</h3>
-                   <p><strong>Status:</strong> <span class="badge badge-${sel.status}">${sel.status}</span></p>
-                   <p><strong>Target Revision:</strong> ${sel.target_revision}</p>
-                   <p><strong>Proposed By:</strong> ${sel.proposed_by}</p>
-                   <div class="diff-container">
-                     <h4>Mutations</h4>
-                     ${diffRows}
-                   </div>
-                   <div class="action-bar">
-                     <button class="btn btn-success" id="btn-approve" ${sel.status !== "proposed" ? "disabled" : ""}>Approve</button>
-                     <button class="btn btn-primary" id="btn-apply" ${sel.status !== "approved" ? "disabled" : ""}>Apply to Canonical</button>
-                     <button class="btn btn-danger" id="btn-withdraw" ${sel.status === "applied" ? "disabled" : ""}>Withdraw</button>
-                   </div>`
-                : `<p class="empty-state">Select a changeset to review.</p>`
+                ? `
+              <div class="proposal-card">
+                <h3>Proposal: <code>${sel.id}</code></h3>
+                <div class="meta-row">
+                  <span class="badge badge-${sel.status}">${sel.status}</span>
+                  <span>Proposed by: <strong>${sel.proposed_by}</strong></span>
+                  <span>Base: <code>${sel.base_revision}</code> → Target: <code>${sel.target_revision}</code></span>
+                </div>
+
+                <h4>Suggested Adjustments</h4>
+                <div class="diff-container">
+                  ${diffRows}
+                </div>
+
+                <div class="review-actions">
+                  ${
+                    sel.status !== "withdrawn"
+                      ? `<button class="btn btn-danger" id="btn-withdraw-proposal" data-id="${sel.id}">Withdraw Proposal</button>`
+                      : `<span class="muted">Proposal has been withdrawn.</span>`
+                  }
+                </div>
+              </div>`
+                : `<div class="empty-state">Select a proposal from the list to review adjustments.</div>`
             }
           </div>
         </div>
@@ -253,3 +246,7 @@ export class ChangeSetReviewController {
     `;
   }
 }
+
+// CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
+export const ChangeSetReviewController = ProposalReviewController;
+export type ChangeSetReviewProps = ProposalReviewProps;

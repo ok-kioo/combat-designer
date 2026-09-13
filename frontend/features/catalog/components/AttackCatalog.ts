@@ -48,6 +48,8 @@ export class AttackCatalogController {
       this.state.attacks = data.attacks.map((a: any) => ({
         attack_id: a.attack_id,
         name: a.name,
+        character_id: a.character_id ?? null,
+        assignment_status: a.assignment_status ?? (a.character_id ? "ASSIGNED" : "UNASSIGNED"),
         startup_frames: a.startup_frames,
         active_frames: a.active_frames,
         recovery_frames: a.recovery_frames,

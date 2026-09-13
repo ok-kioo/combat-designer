@@ -2,10 +2,10 @@ import { ProjectPanelController, type ProjectPanelProps } from "../../project-wo
 import { DirectorChatController, type DirectorChatProps } from "../../director-chat/components/DirectorChat.js";
 import { AttackCatalogController, type AttackCatalogProps } from "../../catalog/components/AttackCatalog.js";
 import { SimulationWorkbenchController, type SimulationWorkbenchProps } from "../../simulation-workbench/components/SimulationWorkbench.js";
-import { ChangeSetReviewController, type ChangeSetReviewProps } from "../../changeset-review/components/ChangeSetReview.js";
+import { ProposalReviewController, type ProposalReviewProps } from "../../proposal-review/components/ProposalReview.js";
 import { ApiClient, defaultApiClient } from "../../../shared/services/api-client.js";
 
-export type ActiveExplorerTab = "explorer" | "catalog" | "workbench" | "changesets";
+export type ActiveExplorerTab = "explorer" | "catalog" | "workbench" | "proposals" | "changesets";
 
 export interface CombatExplorerConfig {
   workspaceId: string;
@@ -15,7 +15,9 @@ export interface CombatExplorerConfig {
   directorChatProps?: Partial<DirectorChatProps>;
   catalogProps?: Partial<AttackCatalogProps>;
   workbenchProps?: Partial<SimulationWorkbenchProps>;
-  changesetReviewProps?: Partial<ChangeSetReviewProps>;
+  proposalReviewProps?: Partial<ProposalReviewProps>;
+  // CODE_LEGACY_PRODUCT_DIRECTION
+  changesetReviewProps?: Partial<ProposalReviewProps>;
 }
 
 export class CombatExplorerController {
@@ -27,7 +29,12 @@ export class CombatExplorerController {
   public readonly directorChat: DirectorChatController;
   public readonly catalog: AttackCatalogController;
   public readonly workbench: SimulationWorkbenchController;
-  public readonly changesetReview: ChangeSetReviewController;
+  public readonly proposalReview: ProposalReviewController;
+
+  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
+  public get changesetReview(): ProposalReviewController {
+    return this.proposalReview;
+  }
 
   constructor(config: CombatExplorerConfig) {
     this.workspaceId = config.workspaceId;
@@ -60,9 +67,10 @@ export class CombatExplorerController {
       ...config.workbenchProps,
     });
 
-    this.changesetReview = new ChangeSetReviewController({
+    this.proposalReview = new ProposalReviewController({
       workspaceId: config.workspaceId,
       apiClient: this.apiClient,
+      ...config.proposalReviewProps,
       ...config.changesetReviewProps,
     });
   }
@@ -86,7 +94,7 @@ export class CombatExplorerController {
             ? this.catalog.renderModel()
             : this.activeTab === "workbench"
             ? this.workbench.renderModel()
-            : this.changesetReview.renderModel(),
+            : this.proposalReview.renderModel(),
       },
       rightColumn: {
         name: "DirectorChat",
@@ -100,8 +108,8 @@ export class CombatExplorerController {
     const navTabs: Array<{ id: ActiveExplorerTab; label: string }> = [
       { id: "explorer", label: "1. Explorer" },
       { id: "catalog", label: "2. Attack Catalog" },
-      { id: "workbench", label: "3. Simulation & Gate" },
-      { id: "changesets", label: "4. ChangeSet Review" },
+      { id: "workbench", label: "3. Simulation & Validation" },
+      { id: "proposals", label: "4. Proposals & Adjustments" },
     ];
 
     const navHtml = navTabs

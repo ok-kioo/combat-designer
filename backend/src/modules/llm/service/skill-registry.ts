@@ -13,7 +13,7 @@
  * - failure_behavior
  *
  * Invariant: No Skill has implicit access to all tools.
- * Invariant: combat_apply_change DOES NOT EXIST in any allowlist.
+ * Invariant: Direct engine mutation tools DO NOT EXIST in any allowlist.
  */
 
 import type { ChatIntent, PublicActivity } from "../domain/entity/chat.js";
@@ -85,14 +85,12 @@ export class SkillRegistry {
         return "Consultando frame data...";
       case "combat_simulate":
         return "Simulando cenário de combate...";
-      case "combat_verify":
-        return "Validando resultado mecânico...";
+      case "combat_analyze":
+        return "Analisando diagnósticos e findings de combate...";
       case "combat_propose_change":
         return "Formulando proposta de balanceamento...";
       case "combat_impact_analysis":
         return "Analisando impacto de alterações...";
-      case "combat_explain_gate":
-        return "Examinando veredito mecânico...";
       case "list_scenarios":
         return "Carregando cenários disponíveis...";
       default:
@@ -125,7 +123,7 @@ export class SkillRegistry {
       purpose: "Evaluate risk/reward, damage scaling, counterplay, DPS and burst",
       allowed_intents: ["BALANCE_ANALYSIS", "SIMULATION"],
       required_context: ["selected_attacks", "simulation_budget"],
-      allowed_tools: ["combat_search", "combat_simulate", "combat_verify"],
+      allowed_tools: ["combat_search", "combat_simulate", "combat_analyze"],
       input_schema: { attack_ids: "array", target_metrics: "object" },
       output_schema: { dps_analysis: "object", counterplay_window: "number" },
       validation_requirements: ["require_simulation_evidence"],
@@ -133,7 +131,7 @@ export class SkillRegistry {
       public_labels: {
         combat_search: "Buscando parâmetros do golpe...",
         combat_simulate: "Simulando impacto no balanceamento...",
-        combat_verify: "Validando restrições mecânicas de balanceamento...",
+        combat_analyze: "Validando diagnósticos de balanceamento...",
       },
     });
 
@@ -160,7 +158,7 @@ export class SkillRegistry {
       purpose: "Maximize combo damage, minimize execution cost and duration",
       allowed_intents: ["COMBO_OPTIMIZATION"],
       required_context: ["starter_attack", "resource_meter"],
-      allowed_tools: ["combat_search", "combat_simulate", "combat_verify"],
+      allowed_tools: ["combat_search", "combat_simulate", "combat_analyze"],
       input_schema: { starter_attack_id: "string", meter_budget: "number" },
       output_schema: { optimal_route: "array", peak_damage: "number" },
       validation_requirements: ["require_strict_fuel_bound"],
@@ -168,7 +166,7 @@ export class SkillRegistry {
       public_labels: {
         combat_search: "Examinando rotas de dano máximo...",
         combat_simulate: "Otimizando sequências no simulador...",
-        combat_verify: "Verificando limites de burst e juggle...",
+        combat_analyze: "Analisando limites de dano e juggle...",
       },
     });
 
@@ -178,15 +176,14 @@ export class SkillRegistry {
       purpose: "Identify infinite loops, infinite stun locks, and unescapable sequences",
       allowed_intents: ["BALANCE_ANALYSIS"],
       required_context: ["loop_attacks", "simulation_cycles"],
-      allowed_tools: ["combat_simulate", "combat_verify", "combat_explain_gate"],
+      allowed_tools: ["combat_simulate", "combat_analyze"],
       input_schema: { cycle_attacks: "array" },
       output_schema: { is_infinite: "boolean", escape_window_frames: "number" },
       validation_requirements: ["require_cycle_analysis"],
       failure_behavior: "flag_unsafe",
       public_labels: {
         combat_simulate: "Simulando repetições de sequência...",
-        combat_verify: "Validando integridade contra loops infinitos...",
-        combat_explain_gate: "Examinando relatório de ciclos...",
+        combat_analyze: "Examinando diagnósticos de loop e hitstun...",
       },
     });
 
@@ -196,7 +193,7 @@ export class SkillRegistry {
       purpose: "Analyze opponent response windows and defensive options",
       allowed_intents: ["COMBAT_ANALYSIS", "BALANCE_ANALYSIS"],
       required_context: ["attacker", "defender"],
-      allowed_tools: ["combat_search", "combat_simulate", "combat_verify"],
+      allowed_tools: ["combat_search", "combat_simulate", "combat_analyze"],
       input_schema: { attack_id: "string" },
       output_schema: { reaction_window: "number", defensive_options: "array" },
       validation_requirements: ["require_reaction_window_check"],
@@ -204,7 +201,7 @@ export class SkillRegistry {
       public_labels: {
         combat_search: "Consultando recovery e blockstun...",
         combat_simulate: "Simulando janelas de resposta do oponente...",
-        combat_verify: "Verificando conformidade de reação...",
+        combat_analyze: "Verificando conformidade de reação...",
       },
     });
 
@@ -228,24 +225,24 @@ export class SkillRegistry {
     // 8. propose_balance_adjustment
     this.register({
       skill_id: "propose_balance_adjustment",
-      purpose: "Create balance adjustment proposals validated through simulation and verification",
+      purpose: "Create balance adjustment proposals validated through simulation and analysis",
       allowed_intents: ["BALANCE_ANALYSIS"],
       required_context: ["active_attacks", "project_revision"],
       allowed_tools: [
         "combat_search",
         "combat_simulate",
-        "combat_verify",
+        "combat_analyze",
         "combat_propose_change",
         "combat_impact_analysis",
       ],
       input_schema: { attack_id: "string", mutations: "array" },
-      output_schema: { proposal_id: "string", validation_verdict: "string" },
-      validation_requirements: ["require_simulation_then_validation"],
+      output_schema: { proposal_id: "string", validation_outcome: "string" },
+      validation_requirements: ["require_simulation_then_analysis"],
       failure_behavior: "reject_proposal",
       public_labels: {
         combat_search: "Analisando valores atuais de combate...",
         combat_simulate: "Simulando impacto da proposta...",
-        combat_verify: "Validando restrições mecânicas da proposta...",
+        combat_analyze: "Validando diagnósticos mecânicos da proposta...",
         combat_propose_change: "Criando proposta de alteração...",
         combat_impact_analysis: "Avaliando impacto colateral...",
       },
@@ -254,34 +251,33 @@ export class SkillRegistry {
     // 9. validate_proposal
     this.register({
       skill_id: "validate_proposal",
-      purpose: "Validate proposed changes against mechanical rules and project specs",
+      purpose: "Validate proposed changes against diagnostic findings and project specs",
       allowed_intents: ["SPEC_VALIDATION"],
       required_context: ["proposed_changeset", "specs"],
-      allowed_tools: ["combat_simulate", "combat_verify", "combat_explain_gate"],
-      input_schema: { changeset_id: "string", profile: "string" },
-      output_schema: { verdict: "string", violations: "array" },
-      validation_requirements: ["require_authoritative_gate"],
+      allowed_tools: ["combat_simulate", "combat_analyze"],
+      input_schema: { changeset_id: "string" },
+      output_schema: { valid: "boolean", findings: "array" },
+      validation_requirements: ["require_spec_validation"],
       failure_behavior: "fail_closed",
       public_labels: {
         combat_simulate: "Executando simulação de conformidade...",
-        combat_verify: "Validando contra regras mecânicas e specs...",
-        combat_explain_gate: "Examinando evidências de conformidade...",
+        combat_analyze: "Validando diagnósticos contra specs...",
       },
     });
 
     // 10. explain_simulation
     this.register({
       skill_id: "explain_simulation",
-      purpose: "Explain simulation metrics, timeline events, and mechanical validator verdicts",
+      purpose: "Explain simulation metrics, timeline events, and diagnostic findings",
       allowed_intents: ["EXPLANATION"],
       required_context: ["simulation_run_id"],
-      allowed_tools: ["combat_explain_gate", "list_scenarios"],
+      allowed_tools: ["combat_analyze", "list_scenarios"],
       input_schema: { run_id: "string" },
       output_schema: { explanation: "string", metrics_summary: "object" },
-      validation_requirements: ["require_gate_run_record"],
+      validation_requirements: ["require_simulation_record"],
       failure_behavior: "return_generic_explanation",
       public_labels: {
-        combat_explain_gate: "Examinando detalhes do veredito...",
+        combat_analyze: "Examinando métricas e diagnósticos da simulação...",
         list_scenarios: "Consultando cenários de teste...",
       },
     });

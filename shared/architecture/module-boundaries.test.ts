@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
-function getSourceFiles(dir: string, extensions: string[] = [".ts", ".rs"]): string[] {
+function getSourceFiles(dir: string, extensions: string[] = [".ts", ".tsx", ".rs"]): string[] {
   const results: string[] = [];
   if (!fs.existsSync(dir)) return results;
 
@@ -16,6 +17,8 @@ function getSourceFiles(dir: string, extensions: string[] = [".ts", ".rs"]): str
           entry.name === "dist" ||
           entry.name === "target" ||
           entry.name === "tests" ||
+          entry.name === "e2e" ||
+          entry.name === "test-results" ||
           entry.name === "fixtures" ||
           entry.name === ".agents" ||
           entry.name === ".harness"
@@ -59,6 +62,7 @@ describe("Architecture & Module Boundary Invariants", () => {
 
     const ignored = new Set([
       ".git",
+      ".codex", // Desktop tooling metadata, not a runtime module.
       "node_modules",
     ]);
 
@@ -172,8 +176,8 @@ describe("Architecture & Module Boundary Invariants", () => {
     expect(fs.existsSync(path.join(rootDir, "backend/src/infrastructure/provider/ingestion/fixtures/unity-bundle"))).toBe(true);
     // SimulationPort in backend/src/modules/combat/domain/repository
     expect(fs.existsSync(path.join(rootDir, "backend/src/modules/combat/domain/repository/simulation-port.ts"))).toBe(true);
-    // MechanicalGatePort in backend/src/modules/combat/domain/repository
-    expect(fs.existsSync(path.join(rootDir, "backend/src/modules/combat/domain/repository/mechanical-gate-port.ts"))).toBe(true);
+    // CombatAnalysisPort in backend/src/modules/combat/domain/repository
+    expect(fs.existsSync(path.join(rootDir, "backend/src/modules/combat/domain/repository/combat-analysis-port.ts"))).toBe(true);
     // Rust engine in engine/src/
     expect(fs.existsSync(path.join(rootDir, "engine/src/domain"))).toBe(true);
     expect(fs.existsSync(path.join(rootDir, "engine/src/simulation"))).toBe(true);
@@ -278,9 +282,16 @@ describe("Architecture & Module Boundary Invariants", () => {
     const violations: string[] = [];
     for (const file of files) {
       const raw = fs.readFileSync(file, "utf8");
-      const clean = stripComments(raw);
+      const source = ts.createSourceFile(file, raw, ts.ScriptTarget.Latest, true);
+      const imports: string[] = [];
+      function inspect(node: ts.Node) {
+        if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) imports.push(node.moduleSpecifier.text);
+        if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === 'require')) && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) imports.push(node.arguments[0].text);
+        ts.forEachChild(node, inspect);
+      }
+      inspect(source);
       for (const obs of forbiddenObservability) {
-        if (clean.includes(obs)) {
+        if (imports.some(specifier => specifier.includes(obs))) {
           violations.push(`${file} imports forbidden observability infrastructure '${obs}'`);
         }
       }

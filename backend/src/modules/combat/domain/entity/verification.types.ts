@@ -1,18 +1,5 @@
 import { z } from "zod";
 
-/**
- * GateVerdict represents the aggregated decision of the Mechanical Gate.
- * Strict fail-closed semantics apply.
- */
-export const GateVerdictSchema = z.enum([
-  "PASS",
-  "FAIL",
-  "BLOCKED",
-  "STALE",
-  "BUDGET_EXCEEDED",
-  "ERROR",
-]);
-export type GateVerdict = z.infer<typeof GateVerdictSchema>;
 
 /**
  * CheckStatus represents the evaluation status of an individual verification rule.
@@ -145,28 +132,6 @@ export const CheckResultSchema = z.object({
 });
 export type CheckResult = z.infer<typeof CheckResultSchema>;
 
-/**
- * GateResult is the formal decision artifact produced by the Mechanical Gate.
- */
-export const GateResultSchema = z.object({
-  gate_run_id: z.string().min(1),
-  workspace_id: z.string().min(1),
-  project_revision: z.string().min(1),
-  canonical_snapshot_hash: z.string().min(1),
-  simulation_input_hash: z.string().min(1),
-  simulation_state_hash: z.string(),
-  event_log_hash: z.string(),
-  verification_profile: z.string().min(1),
-  rule_set_version: z.string().min(1),
-  verifier_version: z.string().min(1),
-  verdict: GateVerdictSchema,
-  checks: z.array(CheckResultSchema),
-  violations: z.array(ViolationCodeSchema),
-  evidence: z.array(EvidenceSchema),
-  budgets: VerificationBudgetResultSchema,
-  gate_result_hash: z.string().min(64),
-});
-export type GateResult = z.infer<typeof GateResultSchema>;
 
 /**
  * Request DTO submitted to the Mechanical Gate Port.

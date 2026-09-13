@@ -2,7 +2,7 @@
 name = "combat-engine"
 version = "0.1.0"
 edition = "2021"
-description = "Pure, deterministic discrete frame-clock combat engine, canonical domain model and mechanical verification gate"
+description = "Pure, deterministic discrete frame-clock combat engine, canonical domain model and combat analysis and diagnostics"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

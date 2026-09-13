@@ -55,35 +55,31 @@ export function getCombatToolDeclarations(workspaceId: string): LlmToolDeclarati
       },
     },
     {
-      name: "combat_verify",
-      description: `Run Mechanical Gate verification in workspace '${workspaceId}'. Checks balance constraints (DPS limits, burst damage, juggle frames, reaction windows). Returns an authoritative verdict: PASS, FAIL, BLOCKED, STALE, BUDGET_EXCEEDED, or ERROR. You must NEVER fabricate or override this verdict.`,
+      name: "combat_analyze",
+      description: `Execute combat analysis and diagnostics in workspace '${workspaceId}'. Evaluates simulation outcomes, frame timings, damage scaling, stun loops, and counterplay windows to produce consultative findings and recommendations.`,
       parameters: {
         type: "object",
         properties: {
-          project_id: {
+          subject: {
             type: "string",
-            description: "The project identifier.",
+            description: "Subject or focus of the analysis.",
           },
-          project_revision: {
+          target_attack_id: {
             type: "string",
-            description: "The project revision to verify.",
+            description: "Optional specific attack ID to analyze.",
           },
-          canonical_snapshot_hash: {
-            type: "string",
-            description: "Hash of the canonical snapshot to verify against.",
-          },
-          verification_profile: {
-            type: "string",
-            description: "Verification profile: 'strict', 'relaxed', or 'custom'.",
-            enum: ["strict", "relaxed", "custom"],
+          sequence: {
+            type: "array",
+            description: "Optional sequence of attack IDs to analyze for loops or combos.",
+            items: { type: "string" },
           },
         },
-        required: ["project_id"],
+        required: ["subject"],
       },
     },
     {
       name: "combat_propose_change",
-      description: `Propose a ChangeSet with mutations to attack parameters in workspace '${workspaceId}'. Creates a proposal that must be reviewed, verified through the Mechanical Gate, and approved by a human before it can be applied. You may ONLY propose — you cannot approve or apply.`,
+      description: `Propose a ChangeSet with mutations to attack parameters in workspace '${workspaceId}'. Creates a proposal that can be reviewed and validated. You may ONLY propose — you cannot alter the engine.`,
       parameters: {
         type: "object",
         properties: {
@@ -102,24 +98,6 @@ export function getCombatToolDeclarations(workspaceId: string): LlmToolDeclarati
           },
         },
         required: ["base_revision", "target_revision", "mutations"],
-      },
-    },
-    {
-      name: "combat_explain_gate",
-      description: `Explain a Mechanical Gate verdict for workspace '${workspaceId}'. Provides human-readable explanation of why a gate run produced its verdict (PASS, FAIL, BUDGET_EXCEEDED, etc.).`,
-      parameters: {
-        type: "object",
-        properties: {
-          gate_run_id: {
-            type: "string",
-            description: "The ID of the gate run to explain.",
-          },
-          verdict: {
-            type: "string",
-            description: "The verdict to explain (optional, used for context).",
-          },
-        },
-        required: ["gate_run_id"],
       },
     },
     {

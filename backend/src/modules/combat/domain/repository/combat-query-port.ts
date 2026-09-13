@@ -1,5 +1,6 @@
 export interface CombatSearchFilter {
   workspace_id: string;
+  character_id?: string;
   query?: string;
   tag?: string;
   min_cancel_window?: number;
@@ -18,6 +19,8 @@ export interface AttackSummary {
     end_frame: number;
   };
   tags?: string[];
+  character_id?: string | null;
+  assignment_status?: "ASSIGNED" | "UNASSIGNED";
   untrusted_text?: boolean;
 }
 

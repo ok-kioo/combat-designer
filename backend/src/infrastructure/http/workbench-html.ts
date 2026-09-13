@@ -5,7 +5,7 @@
  * Allows game designers to interactively:
  * 1. Browse and filter the Attack Catalog with frame data
  * 2. Select attacks into the LLM context envelope
- * 3. Run deterministic simulations and Mechanical Gate checks
+ * 3. Run deterministic simulations and verification checks
  * 4. Review, approve, and apply ChangeSets
  * 5. Chat with the Combat Director LLM (Gemini API with function calling)
  */
@@ -303,8 +303,8 @@ export function renderWorkbenchHtml(defaultWorkspaceId = "ws-default"): string {
 
   <nav class="tab-nav">
     <button class="tab-btn active" onclick="switchTab('catalog')">1. Attack Catalog</button>
-    <button class="tab-btn" onclick="switchTab('workbench')">2. Simulation & Gate</button>
-    <button class="tab-btn" onclick="switchTab('changesets')">3. ChangeSets</button>
+    <button class="tab-btn" onclick="switchTab('workbench')">2. Simulation & Diagnostics</button>
+    <button class="tab-btn" onclick="switchTab('proposals')">3. Proposals & Adjustments</button>
     <button class="tab-btn" onclick="switchTab('api')">4. API Explorer</button>
   </nav>
 
@@ -344,7 +344,7 @@ export function renderWorkbenchHtml(defaultWorkspaceId = "ws-default"): string {
         </div>
       </div>
 
-      <!-- 2. Simulation & Gate -->
+      <!-- 2. Simulation & Diagnostics -->
       <div id="tab-workbench" class="tab-content">
         <div class="card">
           <h3>Deterministic Simulation</h3>
@@ -365,33 +365,33 @@ export function renderWorkbenchHtml(defaultWorkspaceId = "ws-default"): string {
         </div>
 
         <div class="card">
-          <h3>Mechanical Gate Verification</h3>
+          <h3>Combat Analysis & Diagnostics</h3>
           <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 12px;">
-            Validates safety invariants: sustained DPS limit, burst damage, infinite loops, and reaction windows.
+            Analyzes combat invariants: sustained DPS limit, burst damage, infinite loops, and counterplay.
           </p>
           <div style="display: flex; gap: 12px; margin-bottom: 12px;">
-            <button class="btn btn-success" onclick="runVerification('strict')">Verify (Strict Profile)</button>
-            <button class="btn btn-secondary" onclick="runVerification('fail_test')">Test Invariant Failure</button>
+            <button class="btn btn-success" onclick="runVerification('strict')">Analyze (Strict Profile)</button>
+            <button class="btn btn-secondary" onclick="runVerification('fail_test')">Test Invariant Findings</button>
           </div>
           <div id="gate-result" style="display: none;">
             <div style="font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-              Verdict: <span id="gate-verdict-badge" class="badge badge-live">PASS</span>
-              Gate Run ID: <code id="gate-run-id" style="font-family: var(--mono); font-size: 0.8rem;"></code>
+              Status: <span id="gate-verdict-badge" class="badge badge-live">CLEAR</span>
+              Run ID: <code id="gate-run-id" style="font-family: var(--mono); font-size: 0.8rem;"></code>
             </div>
             <pre class="code-block" id="gate-details"></pre>
           </div>
         </div>
       </div>
 
-      <!-- 3. ChangeSets -->
-      <div id="tab-changesets" class="tab-content">
+      <!-- 3. Proposals & Adjustments -->
+      <div id="tab-proposals" class="tab-content">
         <div class="card">
-          <h3>ChangeSet Proposals</h3>
+          <h3>Suggested Adjustments & Proposals</h3>
           <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 12px;">
-            Workflow: LLM proposes &rarr; Gate verifies &rarr; Human approves &rarr; Applies.
+            Workflow: Combat Analysis &rarr; Findings &rarr; Recommendation &rarr; Proposal Review.
           </p>
-          <div id="changesets-container">
-            <p style="color: var(--text-dim); font-size: 0.85rem;">No active changesets in workspace.</p>
+          <div id="proposals-container">
+            <p style="color: var(--text-dim); font-size: 0.85rem;">No active proposals in workspace.</p>
           </div>
         </div>
       </div>
@@ -408,8 +408,8 @@ export function renderWorkbenchHtml(defaultWorkspaceId = "ws-default"): string {
               <tr><td><code>GET</code></td><td><code>/health</code></td><td>Liveness & Readiness probe</td></tr>
               <tr><td><code>GET</code></td><td><code>/api/workspaces/:ws/attacks</code></td><td>Attack catalog & cancel windows</td></tr>
               <tr><td><code>POST</code></td><td><code>/api/workspaces/:ws/simulations</code></td><td>Deterministic simulation execution</td></tr>
-              <tr><td><code>POST</code></td><td><code>/api/workspaces/:ws/verifications</code></td><td>Mechanical Gate safety verification</td></tr>
-              <tr><td><code>GET</code></td><td><code>/api/workspaces/:ws/changesets</code></td><td>List ChangeSet proposals</td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/workspaces/:ws/analyses</code></td><td>Combat analysis and diagnostics</td></tr>
+              <tr><td><code>GET</code></td><td><code>/api/workspaces/:ws/proposals</code></td><td>List Suggested Adjustment proposals</td></tr>
               <tr><td><code>POST</code></td><td><code>/api/workspaces/:ws/chat</code></td><td>Director Chat (Gemini LLM Orchestrator)</td></tr>
             </tbody>
           </table>
@@ -438,7 +438,7 @@ export function renderWorkbenchHtml(defaultWorkspaceId = "ws-default"): string {
       <div class="chat-messages" id="chat-messages">
         <div class="message assistant">
           Hello! I am the <strong>Combat Director</strong>.
-          You can ask me to search attacks, simulate frames, verify safety via the Mechanical Gate, or propose changes.
+          You can ask me to search attacks, simulate frames, execute mechanical validation, or propose changes.
           How can I help tune your combat mechanics?
         </div>
       </div>
@@ -469,7 +469,7 @@ export function renderWorkbenchHtml(defaultWorkspaceId = "ws-default"): string {
     async function refreshAll() {
       currentWorkspace = getWs();
       await loadAttacks();
-      await loadChangeSets();
+      await loadProposals();
     }
 
     async function loadAttacks() {
@@ -583,64 +583,44 @@ export function renderWorkbenchHtml(defaultWorkspaceId = "ws-default"): string {
       }
     }
 
-    async function loadChangeSets() {
+    async function loadProposals() {
       try {
-        const res = await fetch(\`/api/workspaces/\${encodeURIComponent(getWs())}/changesets\`);
+        const res = await fetch(\`/api/workspaces/\${encodeURIComponent(getWs())}/proposals\`);
         const data = await res.json();
-        const list = data.changesets || [];
-        const container = document.getElementById('changesets-container');
+        const list = data.proposals || data.changesets || [];
+        const container = document.getElementById('proposals-container');
+        if (!container) return;
         if (list.length === 0) {
-          container.innerHTML = '<p style="color: var(--text-dim); font-size: 0.85rem;">No active changesets in workspace.</p>';
+          container.innerHTML = '<p style="color: var(--text-dim); font-size: 0.85rem;">No active proposals in workspace.</p>';
           return;
         }
-        container.innerHTML = list.map(cs => \`
+        container.innerHTML = list.map(p => \`
           <div class="card" style="margin-bottom: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <strong>\${cs.changeset_id}</strong>
-              <span class="badge badge-llm">\${cs.status}</span>
+              <strong>\${p.changeset_id || p.id}</strong>
+              <span class="badge badge-llm">\${p.status}</span>
             </div>
             <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 8px;">
-              Proposed by: <code>\${cs.proposed_by}</code> | Base: \${cs.base_revision} &rarr; Target: \${cs.target_revision}
+              Proposed by: <code>\${p.proposed_by}</code> | Base: \${p.base_revision} &rarr; Target: \${p.target_revision}
             </div>
-            <pre class="code-block">\${JSON.stringify(cs.mutations, null, 2)}</pre>
+            <pre class="code-block">\${JSON.stringify(p.mutations, null, 2)}</pre>
             <div style="display: flex; gap: 8px; margin-top: 10px;">
-              \${cs.status === 'proposed' ? \`<button class="btn btn-success" onclick="approveChangeSet('\${cs.changeset_id}')">Approve (Human)</button>\` : ''}
-              \${cs.status === 'approved' ? \`<button class="btn" onclick="applyChangeSet('\${cs.changeset_id}')">Apply to Production</button>\` : ''}
-              \${cs.status !== 'applied' && cs.status !== 'withdrawn' ? \`<button class="btn btn-danger" onclick="withdrawChangeSet('\${cs.changeset_id}')">Withdraw</button>\` : ''}
+              \${p.status !== 'withdrawn' ? \`<button class="btn btn-danger" onclick="withdrawProposal('\${p.changeset_id || p.id}')">Withdraw</button>\` : ''}
             </div>
           </div>
         \`).join('');
       } catch (err) {
-        console.error('Failed to load changesets:', err);
+        console.error('Failed to load proposals:', err);
       }
     }
 
-    async function approveChangeSet(id) {
-      await fetch(\`/api/workspaces/\${encodeURIComponent(getWs())}/changesets/\${encodeURIComponent(id)}/approve\`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approver_id: 'human_lead' })
-      });
-      await loadChangeSets();
-    }
-
-    async function applyChangeSet(id) {
-      await fetch(\`/api/workspaces/\${encodeURIComponent(getWs())}/changesets/\${encodeURIComponent(id)}/apply\`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gate_result: { verdict: 'PASS' } })
-      });
-      await loadChangeSets();
-      await loadAttacks();
-    }
-
-    async function withdrawChangeSet(id) {
-      await fetch(\`/api/workspaces/\${encodeURIComponent(getWs())}/changesets/\${encodeURIComponent(id)}/withdraw\`, {
+    async function withdrawProposal(id) {
+      await fetch(\`/api/workspaces/\${encodeURIComponent(getWs())}/proposals/\${encodeURIComponent(id)}/withdraw\`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: 'Withdrawn by designer' })
       });
-      await loadChangeSets();
+      await loadProposals();
     }
 
     function usePrompt(text) {
@@ -692,7 +672,7 @@ export function renderWorkbenchHtml(defaultWorkspaceId = "ws-default"): string {
 
         chatContainer.innerHTML += \`
           <div class="message assistant">
-            <div>\${data.reply || 'Operation executed.'}</div>
+            <div>\${data.reply || 'Análise de combate concluída.'}</div>
             \${toolHtml}
           </div>
         \`;

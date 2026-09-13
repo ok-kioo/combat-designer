@@ -60,30 +60,15 @@ describe("SPEC 06 — LLM Orchestration Tests (06.T.13 - 06.T.20)", () => {
     ).rejects.toThrow(/Hallucinated or unauthorized workspace 'ws_hallucinated_other_project'/);
   });
 
-  it("06.T.16: fabricated PASS is rejected when authoritative gate returned FAIL", async () => {
-    env.gatePort.shouldFail = true;
-    const gateResult = await env.gatePort.verify(
-      {
-        workspace_id: "ws-alpha",
-        project_id: "p1",
-        project_revision: "rev-1",
-        canonical_snapshot_hash: "snap_1",
-        simulation_input_hash: "sim_1",
-        simulation_input: {},
-        verification_profile: { kind: "strict" } as any,
-        verification_budget: {} as any,
-        rule_set_version: "1.0",
-        verifier_version: "1.0",
-      },
-      {} as any
-    );
+  it("06.T.16: fabricated clean analysis claim is rejected when findings exist", async () => {
+    const analysisWithFindings = {
+      status: "COMPLETED",
+      findings: [{ code: "DPS_EXCEEDED", severity: "HIGH" }],
+    };
 
-    expect(gateResult.verdict).toBe("FAIL");
-
-    // LLM claims verdict was PASS
     expect(() =>
-      env.server.orchestrator.validateLlmClaim("PASS", gateResult)
-    ).toThrow(/Fabricated verdict rejected: LLM claimed PASS, but authoritative Mechanical Gate verdict is 'FAIL'/);
+      env.server.orchestrator.validateLlmClaim("COMPLETED_CLEAN", analysisWithFindings)
+    ).toThrow(/Fabricated claim rejected/);
   });
 
   it("06.T.17: fabricated approval by LLM is strictly rejected", async () => {
@@ -100,116 +85,50 @@ describe("SPEC 06 — LLM Orchestration Tests (06.T.13 - 06.T.20)", () => {
     ).rejects.toThrow(/Fabricated approval rejected: LLM cannot approve changesets/);
   });
 
-  it("06.T.18: mechanical FAIL verdict is preserved exactly", async () => {
-    env.gatePort.shouldFail = true;
-    const gateResult = await env.gatePort.verify(
-      {
-        workspace_id: "ws-alpha",
-        project_id: "p1",
-        project_revision: "rev-1",
-        canonical_snapshot_hash: "snap_1",
-        simulation_input_hash: "sim_1",
-        simulation_input: {},
-        verification_profile: { kind: "strict" } as any,
-        verification_budget: {} as any,
-        rule_set_version: "1.0",
-        verifier_version: "1.0",
-      },
-      {} as any
-    );
+  it("06.T.18: analysis status is preserved exactly", async () => {
+    const analysisResult = {
+      analysis_id: "an_1",
+      status: "COMPLETED",
+      findings: [],
+    };
 
-    const preserved = env.server.orchestrator.preserveMechanicalVerdict(gateResult);
-    expect(preserved).toBe("FAIL");
+    const preserved = env.server.orchestrator.preserveAnalysisStatus(analysisResult);
+    expect(preserved).toBe("COMPLETED");
   });
 
-  it("06.T.19: BLOCKED verdict is preserved and never converted to PASS", async () => {
-    env.gatePort.customVerdict = "BLOCKED";
-    const gateResult = await env.gatePort.verify(
-      {
-        workspace_id: "ws-alpha",
-        project_id: "p1",
-        project_revision: "rev-1",
-        canonical_snapshot_hash: "snap_1",
-        simulation_input_hash: "sim_1",
-        simulation_input: {},
-        verification_profile: { kind: "strict" } as any,
-        verification_budget: {} as any,
-        rule_set_version: "1.0",
-        verifier_version: "1.0",
-      },
-      {} as any
-    );
+  it("06.T.19: execution of analyze intent invokes combat_analyze", async () => {
+    const res = (await env.server.orchestrator.executeIntent(env.llmDirector, {
+      type: "verify",
+      workspace_id: "ws-alpha",
+      project_id: "p1",
+      project_revision: "rev-1",
+      canonical_snapshot_hash: "snap-1",
+      simulation_input_hash: "sim-1",
+      profile: "strict",
+    })) as any;
 
-    const preserved = env.server.orchestrator.preserveMechanicalVerdict(gateResult);
-    expect(preserved).toBe("BLOCKED");
-
-    expect(() =>
-      env.server.orchestrator.validateLlmClaim("PASS", gateResult)
-    ).toThrow(/Fabricated verdict rejected/);
+    expect(res.classification).toBe("SIMULATION_RESULT");
+    expect(res.data.source).toBe("combat_analysis");
   });
 
-  it("06.T.20: STALE verdict is preserved and never converted to PASS", async () => {
-    env.gatePort.customVerdict = "STALE";
-    const gateResult = await env.gatePort.verify(
+  it("06.T.20: consultative recommendations provide actionable guidance", async () => {
+    env.analysisPort.findings = [
       {
-        workspace_id: "ws-alpha",
-        project_id: "p1",
-        project_revision: "rev-1",
-        canonical_snapshot_hash: "snap_1",
-        simulation_input_hash: "sim_1",
-        simulation_input: {},
-        verification_profile: { kind: "strict" } as any,
-        verification_budget: {} as any,
-        rule_set_version: "1.0",
-        verifier_version: "1.0",
+        id: "fnd-1",
+        code: "RECOVERY_TOO_LOW",
+        severity: "high",
+        title: "Excessive frame advantage",
+        description: "Recovery is too short relative to hitstun.",
       },
-      {} as any
-    );
+    ];
 
-    const preserved = env.server.orchestrator.preserveMechanicalVerdict(gateResult);
-    expect(preserved).toBe("STALE");
+    const res = await env.gateway.execute(env.llmDirector, "combat_analyze", {
+      workspace_id: "ws-alpha",
+      subject: "Recovery check",
+    });
 
-    expect(() =>
-      env.server.orchestrator.validateLlmClaim("PASS", gateResult)
-    ).toThrow(/Fabricated verdict rejected/);
-  });
-
-  it("09.T.MCP: BUDGET_EXCEEDED verdict is preserved and combat_explain_gate returns actionable guidance", async () => {
-    env.gatePort.customVerdict = "BUDGET_EXCEEDED";
-    const gateResult = await env.gatePort.verify(
-      {
-        workspace_id: "ws-alpha",
-        project_id: "p1",
-        project_revision: "rev-1",
-        canonical_snapshot_hash: "snap_1",
-        simulation_input_hash: "sim_1",
-        simulation_input: {},
-        verification_profile: { kind: "strict" } as any,
-        verification_budget: {} as any,
-        rule_set_version: "1.0",
-        verifier_version: "1.0",
-      },
-      {} as any
-    );
-
-    const preserved = env.server.orchestrator.preserveMechanicalVerdict(gateResult);
-    expect(preserved).toBe("BUDGET_EXCEEDED");
-
-    expect(() =>
-      env.server.orchestrator.validateLlmClaim("PASS", gateResult)
-    ).toThrow(/Fabricated verdict rejected/);
-
-    const explainResult = await env.gateway.execute(
-      env.humanLead,
-      "combat_explain_gate",
-      {
-        workspace_id: "ws-alpha",
-        gate_run_id: "gate_run_budget_exceeded_999",
-      }
-    );
-
-    expect((explainResult.data as any).explanation).toContain(
-      "The search space is too broad for the allocated execution budget"
-    );
+    const data = res.data as any;
+    expect(data.findings).toHaveLength(1);
+    expect(data.findings[0].code).toBe("RECOVERY_TOO_LOW");
   });
 });

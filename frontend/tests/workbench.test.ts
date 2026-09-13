@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { SimulationWorkbenchController } from "../features/simulation-workbench/components/SimulationWorkbench.js";
 import { ApiClient } from "../shared/services/api-client.js";
 
-describe("SPEC 10 — Simulation and Gate Workbench UI (10.UI.4 - 10.UI.5)", () => {
+describe("SPEC 10 — Simulation and Mechanical Validation Workbench UI (10.UI.4 - 10.UI.5)", () => {
   const workspaceId = "ws-workbench-alpha";
 
   it("10.UI.4: SimulationWorkbench runs deterministic simulation and displays event timeline", async () => {
@@ -43,7 +43,7 @@ describe("SPEC 10 — Simulation and Gate Workbench UI (10.UI.4 - 10.UI.5)", () 
     expect(html).toContain("60 frames");
   });
 
-  it("10.UI.5: SimulationWorkbench verifies Mechanical Gate and handles BUDGET_EXCEEDED verdict", async () => {
+  it("10.UI.5: SimulationWorkbench analyzes combat mechanics and displays diagnostics", async () => {
     const mockApiClient = new ApiClient();
     mockApiClient.simulate = vi.fn().mockResolvedValue({
       simulation: {
@@ -56,15 +56,18 @@ describe("SPEC 10 — Simulation and Gate Workbench UI (10.UI.4 - 10.UI.5)", () 
       },
     });
 
-    mockApiClient.verify = vi.fn().mockResolvedValue({
-      gate_result: {
-        gate_run_id: "gate_run_budget_1",
-        verdict: "BUDGET_EXCEEDED",
-        violations: [],
-        checks_count: 5,
-        summary: { total_checks: 5, passed: 0, failed: 0, evidence_count: 0 },
-        explanation: "The search space is too broad for the allocated execution budget.",
-      },
+    mockApiClient.analyzeCombat = vi.fn().mockResolvedValue({
+      id: "an_bench_1",
+      status: "COMPLETED",
+      findings: [
+        {
+          id: "fnd_1",
+          type: "EXCESSIVE_DAMAGE",
+          severity: "medium",
+          title: "High damage on normal attack",
+          description: "Damage exceeds normal threshold.",
+        },
+      ],
     });
 
     const workbench = new SimulationWorkbenchController({
@@ -72,14 +75,17 @@ describe("SPEC 10 — Simulation and Gate Workbench UI (10.UI.4 - 10.UI.5)", () 
       apiClient: mockApiClient,
     });
 
-    const gate = await workbench.runVerification({ budgetExceeded: true });
-    expect(gate.verdict).toBe("BUDGET_EXCEEDED");
-    expect(gate.gate_run_id).toBe("gate_run_budget_1");
+    const analysis = await workbench.runAnalysis({ subject: "Benchmark test" });
+    expect(analysis.status).toBe("COMPLETED");
+    expect(analysis.analysis_id).toBe("an_bench_1");
 
     const model = workbench.renderModel();
-    expect(model.gateResult?.verdict).toBe("BUDGET_EXCEEDED");
+    expect(model.hasAnalysisResult).toBe(true);
+    expect(model.analysisResult?.status).toBe("COMPLETED");
+    expect(model.analysisResult?.analysisId).toBe("an_bench_1");
 
     const html = workbench.renderHtml();
-    expect(html).toContain("BUDGET_EXCEEDED");
+    expect(html).toContain("COMPLETED");
+    expect(html).toContain("an_bench_1");
   });
 });

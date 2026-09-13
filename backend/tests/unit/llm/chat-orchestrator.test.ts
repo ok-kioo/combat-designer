@@ -1,19 +1,15 @@
-/**
- * SPEC 11 — Unit tests for ChatOrchestrator.
- *
- * Tests: 11.U.1 through 11.U.5
- * All tests use a mock LlmProvider — no real API calls.
- */
-
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  ChatOrchestrator,
-  MAX_TOOL_CALL_ROUNDS,
-  type ChatContextEnvelope,
-  type ChatOrchestratorPorts,
+import { describe, it, expect, vi } from "vitest";
+import { ChatOrchestrator } from "../../../src/modules/llm/service/chat-orchestrator.js";
+import type {
+  ChatContextEnvelope,
+  ChatOrchestratorPorts,
 } from "../../../src/modules/llm/service/chat-orchestrator.js";
+import type {
+  LlmProvider,
+  LlmChatRequest,
+  LlmTurnResult,
+} from "../../../src/modules/llm/domain/port/llm-provider.js";
 import { getCombatToolDeclarations } from "../../../src/modules/llm/service/combat-tool-declarations.js";
-import type { LlmProvider, LlmTurnResult, LlmChatRequest } from "../../../src/modules/llm/domain/port/llm-provider.js";
 
 function createMockEnvelope(overrides: Partial<ChatContextEnvelope> = {}): ChatContextEnvelope {
   return {
@@ -37,13 +33,16 @@ function createMockPorts(overrides: Partial<ChatOrchestratorPorts> = {}): ChatOr
     simulationPort: {
       simulate: vi.fn().mockResolvedValue({ total_frames: 120, status: "COMPLETED", final_state_hash: "hash_sim" }),
     } as any,
-    gatePort: {
-      verify: vi.fn().mockResolvedValue({
-        gate_run_id: "gate_001",
-        verdict: "PASS",
-        gate_result_hash: "hash_gate",
-        violations: [],
-        checks: [{ name: "dps_check", result: "pass" }],
+    analysisPort: {
+      analyze: vi.fn().mockResolvedValue({
+        analysis_id: "an_001",
+        workspace_id: "ws_test",
+        project_revision: "rev-1",
+        status: "COMPLETED",
+        findings: [],
+        recommendations: [],
+        evidence_count: 0,
+        analyzed_at: new Date().toISOString(),
       }),
     } as any,
     saveChangeset: vi.fn(),
@@ -59,16 +58,15 @@ function createMockLlmProvider(chatFn: (req: LlmChatRequest) => Promise<LlmTurnR
 describe("ChatOrchestrator", () => {
   // 11.U.1 — Tool declarations are valid
   describe("11.U.1 — Combat tool declarations", () => {
-    it("returns 7 tool declarations with valid schemas", () => {
+    it("returns 6 tool declarations with valid schemas", () => {
       const tools = getCombatToolDeclarations("ws_test");
 
-      expect(tools).toHaveLength(7);
+      expect(tools).toHaveLength(6);
       const names = tools.map((t) => t.name);
       expect(names).toContain("combat_search");
       expect(names).toContain("combat_simulate");
-      expect(names).toContain("combat_verify");
+      expect(names).toContain("combat_analyze");
       expect(names).toContain("combat_propose_change");
-      expect(names).toContain("combat_explain_gate");
       expect(names).toContain("combat_impact_analysis");
       expect(names).toContain("list_scenarios");
 
@@ -90,32 +88,36 @@ describe("ChatOrchestrator", () => {
         if (callCount === 1) {
           return {
             text: null,
-            function_calls: [{ name: "combat_search", args: { query: "punch", tag: "melee", limit: 5 } }],
+            function_calls: [{ name: "combat_search", args: { query: "Punch", limit: 5 } }],
             finished: false,
           };
         }
-        return { text: "Found 1 attack matching your query.", function_calls: [], finished: true };
+        return {
+          text: "I found Light Punch.",
+          function_calls: [],
+          finished: true,
+        };
       });
 
       const orchestrator = new ChatOrchestrator(provider, ports);
-      const result = await orchestrator.processMessage(createMockEnvelope());
+      const result = await orchestrator.processMessage(createMockEnvelope({ user_prompt: "Find punches" }));
 
-      expect(ports.queryPort!.searchAttacks).toHaveBeenCalledWith({
-        workspace_id: "ws_test",
-        query: "punch",
-        tag: "melee",
-        min_cancel_window: undefined,
-        limit: 5,
-      });
+      expect(ports.queryPort?.searchAttacks).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspace_id: "ws_test",
+          query: "Punch",
+          limit: 5,
+        })
+      );
+      expect(result.reply).toBe("I found Light Punch.");
       expect(result.tool_calls).toHaveLength(1);
       expect(result.tool_calls[0].tool_id).toBe("combat_search");
-      expect(result.reply).toContain("Found 1 attack");
     });
   });
 
-  // 11.U.3 — Preserves untrusted_text in results
-  describe("11.U.3 — untrusted_text preservation", () => {
-    it("marks search results with untrusted_text: true", async () => {
+  // 11.U.3 — Executes combat_simulate correctly
+  describe("11.U.3 — combat_simulate execution", () => {
+    it("calls simulationPort.simulate with correct payload", async () => {
       const ports = createMockPorts();
       let callCount = 0;
       const provider = createMockLlmProvider(async () => {
@@ -123,23 +125,30 @@ describe("ChatOrchestrator", () => {
         if (callCount === 1) {
           return {
             text: null,
-            function_calls: [{ name: "combat_search", args: { query: "all" } }],
+            function_calls: [{ name: "combat_simulate", args: { scenario_id: "sc_duel_1", max_frames: 180 } }],
             finished: false,
           };
         }
-        return { text: "Results found.", function_calls: [], finished: true };
+        return { text: "Simulation finished.", function_calls: [], finished: true };
       });
 
       const orchestrator = new ChatOrchestrator(provider, ports);
-      const result = await orchestrator.processMessage(createMockEnvelope());
+      const result = await orchestrator.processMessage(createMockEnvelope({ user_prompt: "Simulate duel" }));
 
-      expect(result.tool_calls[0].untrusted_text).toBe(true);
+      expect(ports.simulationPort?.simulate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspace_id: "ws_test",
+          scenario: expect.objectContaining({ scenario_id: "sc_duel_1" }),
+        })
+      );
+      expect(result.tool_calls).toHaveLength(1);
+      expect(result.tool_calls[0].tool_id).toBe("combat_simulate");
     });
   });
 
-  // 11.U.4 — Rejects unknown tool
-  describe("11.U.4 — Unknown tool rejection", () => {
-    it("returns error for tool not in registry", async () => {
+  // 11.U.4 — Handles unknown tool gracefully
+  describe("11.U.4 — Unknown tool handling", () => {
+    it("returns error result for unknown tool and continues conversation", async () => {
       const ports = createMockPorts();
       let callCount = 0;
       const provider = createMockLlmProvider(async () => {
@@ -151,7 +160,7 @@ describe("ChatOrchestrator", () => {
             finished: false,
           };
         }
-        return { text: "Done.", function_calls: [], finished: true };
+        return { text: "Tool failed, recovered.", function_calls: [], finished: true };
       });
 
       const orchestrator = new ChatOrchestrator(provider, ports);
@@ -163,17 +172,20 @@ describe("ChatOrchestrator", () => {
     });
   });
 
-  // 11.U.5 — Preserves mechanical gate verdict
-  describe("11.U.5 — Mechanical gate verdict preservation", () => {
-    it("returns gate verdict unmodified from combat_verify", async () => {
+  // 11.U.5 — Combat analysis findings execution
+  describe("11.U.5 — Combat analysis findings execution", () => {
+    it("returns diagnostic findings from combat_analyze", async () => {
       const ports = createMockPorts({
-        gatePort: {
-          verify: vi.fn().mockResolvedValue({
-            gate_run_id: "gate_fail_001",
-            verdict: "FAIL",
-            gate_result_hash: "hash_fail",
-            violations: [{ rule: "max_dps", message: "DPS exceeded" }],
-            checks: [{ name: "dps_check", result: "fail" }],
+        analysisPort: {
+          analyze: vi.fn().mockResolvedValue({
+            analysis_id: "an_001",
+            workspace_id: "ws_test",
+            project_revision: "rev-1",
+            status: "COMPLETED",
+            findings: [{ id: "fnd_1", type: "low_recovery", severity: "high", title: "Recovery", description: "Too short", attack_ids: ["atk_1"] }],
+            recommendations: [],
+            evidence_count: 1,
+            analyzed_at: new Date().toISOString(),
           }),
         } as any,
       });
@@ -183,11 +195,11 @@ describe("ChatOrchestrator", () => {
         if (callCount === 1) {
           return {
             text: null,
-            function_calls: [{ name: "combat_verify", args: { project_id: "proj_1" } }],
+            function_calls: [{ name: "combat_analyze", args: { subject: "Recovery analysis" } }],
             finished: false,
           };
         }
-        return { text: "Gate failed.", function_calls: [], finished: true };
+        return { text: "Analysis completed.", function_calls: [], finished: true };
       });
 
       const orchestrator = new ChatOrchestrator(provider, ports);
@@ -195,9 +207,9 @@ describe("ChatOrchestrator", () => {
 
       expect(result.tool_calls).toHaveLength(1);
       const output = result.tool_calls[0].output as any;
-      expect(output.source).toBe("mechanical_gate");
-      expect(output.verdict).toBe("FAIL");
-      expect(output.violations).toHaveLength(1);
+      expect(output.source).toBe("combat_analysis");
+      expect(output.status).toBe("COMPLETED");
+      expect(output.findings).toHaveLength(1);
     });
   });
 });

@@ -5,8 +5,13 @@
 ```text
 Project, Revision, Character, Attack, Animation, Hitbox,
 Hurtbox, CancelRule, CombatState, EnemyArchetype, Resource,
-Scenario, Constraint, GateRule, SourceAsset
+Scenario, Constraint, AnalysisRule, SourceAsset
 ```
+
+> [!NOTE]
+> `AnalysisRule`: Regras e restrições analíticas de domínio projetadas para suporte a diagnósticos e busca de combos.
+> O nó histórico `GateRule` é classificado como `CODE_LEGACY` e não representa regras de aprovação runtime.
+
 
 ## Relações
 

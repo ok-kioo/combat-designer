@@ -9,7 +9,7 @@ use crate::verification::budget::{BudgetExceededReason, VerificationBudgetTracke
 use crate::verification::cycle_detector::CycleDetector;
 use crate::verification::evidence::Evidence;
 use crate::verification::profile::VerificationProfile;
-use crate::verification::verdict::{CheckResult, CheckStatus};
+use crate::verification::report::{CheckResult, CheckStatus};
 use crate::verification::violations::ViolationCode;
 
 pub fn check_infinite_loop(

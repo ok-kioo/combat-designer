@@ -353,6 +353,79 @@ export class InMemoryGraphDriver implements GraphDriver {
       return { records: [this.createRecord({ a: atkNode.properties })] };
     }
 
+    // 4b. MERGE Character & HAS_ATTACK
+    if (trimmed.includes("MERGE (c:Character")) {
+      const ws = params.workspace_id as string;
+      const charId = params.character_id as string;
+      const charKey = `Character:${ws}:${charId}`;
+
+      let charNode = this.nodes.get(charKey);
+      if (!charNode) {
+        charNode = { id: charKey, labels: new Set(["Character"]), properties: {} };
+        this.nodes.set(charKey, charNode);
+      }
+      Object.assign(charNode.properties, {
+        workspace_id: ws,
+        character_id: charId,
+        name: params.character_name || charId,
+      });
+
+      if (params.attack_id) {
+        const atkKey = `Attack:${ws}:${params.attack_id}`;
+        const relKey = `HAS_ATTACK:${charKey}:${atkKey}`;
+        if (!this.relationships.has(relKey)) {
+          this.relationships.set(relKey, {
+            id: relKey,
+            type: "HAS_ATTACK",
+            startNodeId: charKey,
+            endNodeId: atkKey,
+            properties: { workspace_id: ws },
+          });
+        }
+      }
+      return { records: [this.createRecord({ c: charNode.properties })] };
+    }
+
+    // 4c. MATCH Character -> HAS_ATTACK -> Attack
+    if (trimmed.includes("MATCH (c:Character") && trimmed.includes("HAS_ATTACK")) {
+      const ws = (params.workspace_id || params.ws) as string | undefined;
+      const charId = params.character_id as string | undefined;
+      const charKey = (ws && charId) ? `Character:${ws}:${charId}` : undefined;
+
+      const records: GraphRecord[] = [];
+      for (const rel of this.relationships.values()) {
+        if (rel.type === "HAS_ATTACK") {
+          if (ws && rel.properties.workspace_id !== ws) continue;
+          if (charKey && rel.startNodeId !== charKey) continue;
+          const charNode = this.nodes.get(rel.startNodeId);
+          const atkNode = this.nodes.get(rel.endNodeId);
+          if (atkNode) {
+            records.push(
+              this.createRecord({
+                c: charNode?.properties,
+                a: atkNode.properties,
+                attack_id: atkNode.properties.attack_id,
+              })
+            );
+          }
+        }
+      }
+      return { records };
+    }
+
+    // 4d. MATCH (c:Character) query
+    if (trimmed.includes("MATCH (c:Character")) {
+      const ws = (params.workspace_id || params.ws) as string | undefined;
+      const records: GraphRecord[] = [];
+      for (const node of this.nodes.values()) {
+        if (node.labels.has("Character")) {
+          if (ws && node.properties.workspace_id !== ws) continue;
+          records.push(this.createRecord({ c: node.properties }));
+        }
+      }
+      return { records };
+    }
+
     // 5. Q01 — Cancel Options
     if (trimmed.includes("Q01_CANCEL_OPTIONS") || (trimmed.includes("HAS_CANCEL") && trimmed.includes("CANCELS_TO") && !trimmed.includes("Q02") && !trimmed.includes("Q03") && !trimmed.includes("launch") && !trimmed.includes("nodes(path)"))) {
       const ws = params.workspace_id as string;

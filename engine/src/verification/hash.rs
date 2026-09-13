@@ -1,6 +1,6 @@
-//! Canonical deterministic SHA-256 hashing for GateResult.
+//! Canonical deterministic SHA-256 hashing for AnalysisReport.
 //!
-//! Excludes non-deterministic operational fields (like gate_run_id or wall-clock timestamps)
+//! Excludes non-deterministic operational fields (like analysis_run_id or wall-clock timestamps)
 //! and the hash itself, ensuring identical verification runs produce identical hashes.
 
 use crate::simulation::sha256::Sha256;
@@ -8,11 +8,11 @@ use serde::Serialize;
 
 use crate::verification::budget::VerificationBudgetResult;
 use crate::verification::evidence::Evidence;
-use crate::verification::verdict::{CheckResult, GateVerdict};
+use crate::verification::report::{AnalysisStatus, CheckResult};
 use crate::verification::violations::ViolationCode;
 
 #[derive(Serialize)]
-struct CanonicalGateResultForm<'a> {
+struct CanonicalAnalysisReportForm<'a> {
     workspace_id: &'a str,
     project_revision: &'a str,
     canonical_snapshot_hash: &'a str,
@@ -21,8 +21,8 @@ struct CanonicalGateResultForm<'a> {
     event_log_hash: &'a str,
     verification_profile: &'a str,
     rule_set_version: &'a str,
-    verifier_version: &'a str,
-    verdict: &'a GateVerdict,
+    analyzer_version: &'a str,
+    status: &'a AnalysisStatus,
     checks: &'a [CheckResult],
     violations: &'a [ViolationCode],
     evidence: &'a [Evidence],
@@ -30,7 +30,7 @@ struct CanonicalGateResultForm<'a> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn compute_gate_result_hash(
+pub fn compute_analysis_hash(
     workspace_id: &str,
     project_revision: &str,
     canonical_snapshot_hash: &str,
@@ -39,14 +39,14 @@ pub fn compute_gate_result_hash(
     event_log_hash: &str,
     verification_profile: &str,
     rule_set_version: &str,
-    verifier_version: &str,
-    verdict: &GateVerdict,
+    analyzer_version: &str,
+    status: &AnalysisStatus,
     checks: &[CheckResult],
     violations: &[ViolationCode],
     evidence: &[Evidence],
     budgets: &VerificationBudgetResult,
 ) -> String {
-    let canonical = CanonicalGateResultForm {
+    let canonical = CanonicalAnalysisReportForm {
         workspace_id,
         project_revision,
         canonical_snapshot_hash,
@@ -55,8 +55,8 @@ pub fn compute_gate_result_hash(
         event_log_hash,
         verification_profile,
         rule_set_version,
-        verifier_version,
-        verdict,
+        analyzer_version,
+        status,
         checks,
         violations,
         evidence,

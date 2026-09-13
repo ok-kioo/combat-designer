@@ -7,6 +7,7 @@ export const CapabilitySchema = z.enum([
   "combat:read",
   "combat:query",
   "combat:simulate",
+  "combat:analyze",
   "combat:verify",
   "combat:propose",
   "changeset:withdraw",

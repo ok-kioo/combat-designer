@@ -24,6 +24,7 @@ export interface LlmFunctionCall {
   name: string;
   args: Record<string, unknown>;
   id?: string;
+  thoughtSignature?: string;
 }
 
 export interface LlmToolResult {

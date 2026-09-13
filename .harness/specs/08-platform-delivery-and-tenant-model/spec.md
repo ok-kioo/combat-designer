@@ -1,6 +1,6 @@
 # Spec 08 — Platform Delivery and Tenant Model
 
-Origem: `regras/propostas/2026-09-09-web-platform-and-security.md`, itens 1 e 8 (ACCEPTED).
+Origem: `.harness/docs/project-context/2026-09-09-web-platform-and-security-decisions.md`, itens 1 e 8 (ACCEPTED).
 
 ## Princípio
 
@@ -54,7 +54,7 @@ Engine (script de exportação)
 
 Não existe modo em que o backend inicia conexão de volta para a máquina do usuário, nem
 plugin com socket aberto. Isso elimina a superfície de firewall/CORS/porta descrita na
-proposta original e mantém o `domain-isolation.md` intacto (ingestion continua sem acesso a
+proposta original e mantém o the reusable domain-boundary rule intacto (ingestion continua sem acesso a
 filesystem de terceiros — o bundle já chega como bytes no boundary do backend).
 
 ## Divergência exporter x parser
@@ -70,7 +70,7 @@ Todo Export Bundle é enviado dentro do contexto de um `workspace_id` explícito
 do usuário no app). `workspace_id` é obrigatório em:
 
 - `Project` no canonical model (specs/01);
-- toda tabela Postgres derivada de Project/Revision/Snapshot/ChangeSet/GateResult;
+- toda tabela Postgres derivada de entidades canônicas do projeto (Project/Revision/Snapshot/Analysis/Finding; tabelas históricas de ChangeSet/GateResult são isoladas como CODE_LEGACY);
 - toda propriedade indexada em nós Neo4j projetados a partir desse Project;
 - todo tool call MCP (parte do auth scope citado em specs/06).
 
@@ -105,8 +105,8 @@ uma tool call MCP). O MCP Gateway é fronteira exclusiva para o protocolo MCP.
 Layout de duas colunas, ambas escopadas ao `workspace_id` ativo:
 
 - **Esquerda — Painel do Projeto**: upload de Export Bundle, status de ingestão (assets
-  processados/quarantined/conflict), revision/snapshot atual, histórico de GateResults e
-  simulações.
+  processados/quarantined/conflict), revision/snapshot atual, histórico de análises (Combat
+  Analysis, findings) e simulações.
 - **Direita — Diretor de Combate**: chat MCP/LLM (specs/06, specs/13).
 
 Nenhuma ação no painel esquerdo escreve diretamente em canonical data — upload dispara o

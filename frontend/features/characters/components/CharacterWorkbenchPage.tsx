@@ -1,0 +1,16 @@
+import { useState, type FormEvent } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { useAuth } from '../../../shared/auth/AuthProvider';
+import { useWorkspace } from '../../../app/layouts/WorkspaceLayout';
+import { Resource, useResource, Empty } from '../../../shared/ui/Resource';
+import type { Character } from '../../project-workspace/types/product';
+export function CharacterWorkbench() {
+  const { api } = useAuth(); const { apiPath, base } = useWorkspace(); const resource = useResource<{ characters: Character[] }>(apiPath + '/characters');
+  const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  async function create(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); setBusy(true); setError(''); try { await api.request(apiPath + '/characters', { method: 'POST', body: JSON.stringify({ name: data.get('name'), display_name: data.get('name'), metadata: { archetype: data.get('archetype') } }) }); form.reset(); resource.reload(); } catch { setError('Não foi possível cadastrar o personagem.'); } finally { setBusy(false); } }
+  return <section data-page="characters"><h1>Personagens</h1><p className="lead">Organize os lutadores e explore seus golpes.</p><details className="card"><summary>Cadastrar personagem</summary><form onSubmit={create}><label>Nome do personagem<input name="name" required maxLength={100} /></label><label>Arquétipo<input name="archetype" maxLength={100} placeholder="Ex.: Rushdown" /></label>{error && <p role="alert" className="error">{error}</p>}<button disabled={busy}>Cadastrar</button></form></details><Resource value={resource} label="Não foi possível carregar os personagens.">{({ characters }) => characters.length ? <div className="cards">{characters.map(c => <article className="card" key={c.id}><span className="badge">{String(c.metadata?.archetype || 'Lutador')}</span><h2><Link to={base + '/characters/' + encodeURIComponent(c.id)}>{c.display_name || c.name}</Link></h2><Link to={base + '/attacks?character=' + encodeURIComponent(c.id)}>Explorar golpes →</Link></article>)}</div> : <Empty><h2>Nenhum personagem cadastrado</h2><p>Cadastre um personagem ou importe os dados do seu jogo.</p><Link to={base + '/import'}>Importar dados</Link></Empty>}</Resource></section>;
+}
+export function CharacterDetail() {
+  const { characterId } = useParams(); const { apiPath, base } = useWorkspace(); const resource = useResource<Character>(apiPath + '/characters/' + encodeURIComponent(characterId!));
+  return <section data-page="character-detail"><Resource value={resource} label="Este personagem não está disponível neste projeto.">{character => <><nav aria-label="Personagem"><Link to={base + '/characters'}>Personagens</Link> / <span>{character.display_name || character.name}</span></nav><h1>{character.display_name || character.name}</h1><p>{String(character.metadata?.archetype || 'Lutador')}</p><div className="actions"><Link className="button" to={base + '/attacks?character=' + encodeURIComponent(character.id)}>Ver golpes</Link><Link className="button" to={base + '/combos?character=' + encodeURIComponent(character.id)}>Ver combos</Link></div></>}</Resource></section>;
+}

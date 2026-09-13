@@ -92,8 +92,8 @@ fn test_05_sec_1_workspace_isolation() {
     let mut req = make_base_request();
     req.workspace_id = "   ".to_string(); // Empty/whitespace workspace
 
-    let result = MechanicalVerifier::verify(&req, &sim);
-    assert_eq!(result.verdict, GateVerdict::Error);
+    let result = CombatVerifier::verify(&req, &sim);
+    assert_eq!(result.status, AnalysisStatus::Error);
     assert!(result
         .violations
         .contains(&ViolationCode::InvalidSimulation));
@@ -114,8 +114,8 @@ fn test_05_sec_2_stale_gate_result() {
         verifier_version: req.verifier_version.clone(),
     };
 
-    let result = MechanicalVerifier::verify_with_baseline(&req, &sim, &baseline);
-    assert_eq!(result.verdict, GateVerdict::Stale);
+    let result = CombatVerifier::verify_with_baseline(&req, &sim, &baseline);
+    assert_eq!(result.status, AnalysisStatus::Stale);
     assert!(result.violations.contains(&ViolationCode::StaleRevision));
 }
 
@@ -124,7 +124,7 @@ fn test_05_sec_3_inconsistent_forged_content_hash() {
     let sim = make_valid_base_sim();
     let req = make_base_request();
 
-    let result1 = MechanicalVerifier::verify(&req, &sim);
+    let result1 = CombatVerifier::verify(&req, &sim);
 
     // Tamper with check message or threshold
     let mut tampered_checks = result1.checks.clone();
@@ -132,7 +132,7 @@ fn test_05_sec_3_inconsistent_forged_content_hash() {
 
     let profile_str = "strict";
     let budget_res = result1.budgets.clone();
-    let forged_hash = compute_gate_result_hash(
+    let forged_hash = compute_analysis_hash(
         &req.workspace_id,
         &req.project_revision,
         &req.canonical_snapshot_hash,
@@ -142,14 +142,14 @@ fn test_05_sec_3_inconsistent_forged_content_hash() {
         profile_str,
         &req.rule_set_version,
         &req.verifier_version,
-        &result1.verdict,
+        &result1.status,
         &tampered_checks,
         &result1.violations,
         &result1.evidence,
         &budget_res,
     );
 
-    assert_ne!(result1.gate_result_hash, forged_hash);
+    assert_ne!(result1.analysis_hash, forged_hash);
 }
 
 #[test]
@@ -160,9 +160,9 @@ fn test_05_sec_4_modified_simulation_result_detected() {
     sim.events[2].sequence = 1;
 
     let req = make_base_request();
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result
         .violations
         .contains(&ViolationCode::InvalidSimulation));
@@ -174,8 +174,8 @@ fn test_05_sec_5_budget_bypass_prevention() {
     let mut req = make_base_request();
     req.verification_budget.max_events_to_analyze = 0; // 0 event budget
 
-    let result = MechanicalVerifier::verify(&req, &sim);
-    assert_eq!(result.verdict, GateVerdict::BudgetExceeded);
+    let result = CombatVerifier::verify(&req, &sim);
+    assert_eq!(result.status, AnalysisStatus::BudgetExceeded);
     assert!(result.violations.contains(&ViolationCode::ExecutionBudget));
 }
 
@@ -185,8 +185,8 @@ fn test_05_sec_6_malformed_verification_request() {
     let mut req = make_base_request();
     req.workspace_id = "".to_string();
 
-    let result = MechanicalVerifier::verify(&req, &sim);
-    assert_eq!(result.verdict, GateVerdict::Error);
+    let result = CombatVerifier::verify(&req, &sim);
+    assert_eq!(result.status, AnalysisStatus::Error);
 }
 
 #[test]
@@ -194,9 +194,9 @@ fn test_05_sec_7_non_deterministic_evidence_ordering_prevented() {
     let sim = make_valid_base_sim();
     let req = make_base_request();
 
-    let first = MechanicalVerifier::verify(&req, &sim);
+    let first = CombatVerifier::verify(&req, &sim);
     for _ in 0..100 {
-        let current = MechanicalVerifier::verify(&req, &sim);
+        let current = CombatVerifier::verify(&req, &sim);
         assert_eq!(first.evidence, current.evidence);
     }
 }
@@ -219,9 +219,9 @@ fn test_05_sec_9_replay_mismatch() {
     sim.final_state_hash = "".to_string();
 
     let req = make_base_request();
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result
         .violations
         .contains(&ViolationCode::InvalidSimulation));
@@ -242,8 +242,8 @@ fn test_05_sec_10_revision_race_detection() {
         verifier_version: req.verifier_version.clone(),
     };
 
-    let result = MechanicalVerifier::verify_with_baseline(&req, &sim, &baseline);
-    assert_eq!(result.verdict, GateVerdict::Stale);
+    let result = CombatVerifier::verify_with_baseline(&req, &sim, &baseline);
+    assert_eq!(result.status, AnalysisStatus::Stale);
 }
 
 #[test]
@@ -257,10 +257,10 @@ fn test_05_sec_11_integer_overflow_safety() {
     sim.events.push(evt);
 
     let req = make_base_request();
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    // Should fail cleanly due to DPS exceeding limit, without crashing or silent overflow to PASS
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    // Should detect findings cleanly due to DPS exceeding limit, without crashing
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result.violations.contains(&ViolationCode::MaxSustainedDps));
 }
 
@@ -270,8 +270,8 @@ fn test_05_sec_12_missing_provenance_in_strict_fails_closed() {
     let mut req = make_base_request();
     req.simulation_input = json!({}); // Empty provenance in strict
 
-    let result = MechanicalVerifier::verify(&req, &sim);
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    let result = CombatVerifier::verify(&req, &sim);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result
         .violations
         .contains(&ViolationCode::ProvenanceRequired));

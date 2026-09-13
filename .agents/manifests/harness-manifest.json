@@ -1,37 +1,111 @@
 {
+  "schema_version": 2,
   "project": "combat-designer-computational",
-  "generated": "2026-09-09",
-  "files": [
-    "README.md",
-    ".harness/rules/architecture/ask-refactoring.md",
-    ".harness/rules/domain/domain-isolation.md",
-    ".harness/rules/mcp/mcp-gateway-invariants.md",
-    ".harness/rules/architecture/suggest-improvements.md",
-    ".harness/rules/security/2026-09-09-web-platform-and-security.md",
-    ".harness/skills/architecture/architecture.md",
-    ".harness/skills/research/lessons.md",
-    ".harness/skills/simulation/mechanical-gate-verification.md",
-    ".harness/skills/architecture/sequential-task-breakdown.md",
-    ".harness/specs/00-fic/spec.md",
-    ".harness/specs/01-canonical-domain/spec.md",
-    ".harness/specs/02-engine-ingestion/spec.md",
-    ".harness/specs/03-knowledge-graph/spec.md",
-    ".harness/specs/04-deterministic-simulator/spec.md",
-    ".harness/specs/05-mechanical-gate/spec.md",
-    ".harness/specs/06-mcp-llm-orchestration/spec.md",
-    ".harness/specs/07-dashboard-and-observability/spec.md",
-    ".harness/specs/08-platform-delivery-and-tenant-model/spec.md",
-    ".harness/specs/09-ingestion-security-and-execution-limits/spec.md",
-    ".harness/docs/architecture/mcp-gateway.md",
-    ".harness/docs/architecture/knowledge-graph.md",
-    ".harness/docs/architecture/clean-architecture.md",
-    ".harness/docs/architecture/dependency-rules.md",
-    ".harness/docs/architecture/deterministic-simulator.md"
+  "artifact_model": {
+    "specs": "project-specific",
+    "architecture_docs": "project-specific",
+    "feature_impact_contracts": "project-specific",
+    "walkthroughs_reports": "project-specific evidence",
+    "rules": "reusable invariants",
+    "skills": "reusable procedures",
+    "lessons": "reusable learned patterns"
+  },
+  "bindings": {
+    "HARNESS_ROOT": ".harness",
+    "SPEC_ROOT": ".harness/specs",
+    "RULE_ROOT": ".harness/rules",
+    "SKILL_ROOT": ".harness/skills",
+    "LESSON_ROOT": ".harness/lessons",
+    "FIC_ROOT": ".harness/docs/feature-impacts",
+    "ARCH_DOC_ROOT": ".harness/docs/architecture",
+    "PROJECT_MAPPING": ".harness/docs/project-context/current-project-mapping.md",
+    "AGENT_ROOT": ".agents",
+    "RUNTIME_ROOTS": [
+      "backend",
+      "engine",
+      "frontend",
+      "mcp",
+      "shared"
+    ],
+    "SPEC_IMPLEMENTATION_INDEX": ".harness/docs/project-context/spec-implementation-index.md"
+  },
+  "read_order": [
+    ".agents/rules/agent-execution-contract.md",
+    ".agents/rules/mandatory-routing.md",
+    ".agents/manifests/harness-manifest.json",
+    ".harness/README.md",
+    ".harness/docs/project-context/current-project-mapping.md",
+    ".harness/docs/project-context/spec-implementation-index.md",
+    "governing project specs",
+    "matching reusable rules",
+    "mandatory reusable skills"
   ],
-  "counts": {
-    "rules": 5,
-    "skills": 4,
-    "specs": 10,
-    "docs": 5
-  }
+  "mandatory_routing": {
+    "any_public_contract_or_spec_change": [
+      "Specification Compliance Validation"
+    ],
+    "refactor_or_repository_structure": [
+      "Domain-Oriented Repository Layout",
+      "Specification Compliance Validation"
+    ],
+    "architecture_boundary_change": [
+      "Architecture Boundary Design",
+      "Specification Compliance Validation"
+    ],
+    "deterministic_or_mechanical_change": [
+      "Validate Deterministic Feature Mechanics",
+      "Specification Compliance Validation"
+    ],
+    "external_input_tool_or_auth_change": [
+      "Review External Input and Agent Tool Boundaries",
+      "Specification Compliance Validation"
+    ],
+    "multi_boundary_change": [
+      "Sequential Task Breakdown"
+    ],
+    "reusable_failure_pattern": [
+      "Lesson Extraction and Promotion"
+    ]
+  },
+  "project_validation_commands": [
+    "npm run validate-fic",
+    "npm run typecheck",
+    "npm run test:architecture",
+    "npm --prefix backend test",
+    "npm --prefix mcp test",
+    "npm --prefix frontend test",
+    "cargo fmt --check --manifest-path engine/Cargo.toml",
+    "cargo clippy --manifest-path engine/Cargo.toml --workspace --offline --target-dir engine/target -- -D warnings",
+    "cargo test --manifest-path engine/Cargo.toml --workspace --offline --target-dir engine/target"
+  ],
+  "canonical_reusable_rules": [
+    ".harness/rules/core/artifact-authority-and-conflict-resolution.md",
+    ".harness/rules/core/execution-and-evidence-discipline.md",
+    ".harness/rules/architecture/refactoring-safety.md",
+    ".harness/rules/architecture/runtime-vs-development-governance.md",
+    ".harness/rules/architecture/domain-and-dependency-boundaries.md",
+    ".harness/rules/architecture/improvement-proposal-governance.md",
+    ".harness/rules/security/tool-gateway-invariants.md",
+    ".harness/rules/security/external-input-and-platform-security.md",
+    ".harness/rules/analysis/deterministic-computation-and-analysis.md"
+  ],
+  "canonical_reusable_skills": [
+    ".harness/skills/architecture/architecture-boundary-design.md",
+    ".harness/skills/architecture/domain-oriented-repository-layout.md",
+    ".harness/skills/delivery/sequential-task-breakdown.md",
+    ".harness/skills/delivery/spec-compliance-validation.md",
+    ".harness/skills/analysis/validate-feature-mechanics.md",
+    ".harness/skills/security/review-external-input-and-tool-boundaries.md",
+    ".harness/skills/knowledge/lesson-extraction-and-promotion.md"
+  ],
+  "agent_rules": [
+    ".agents/rules/agent-execution-contract.md",
+    ".agents/rules/mandatory-routing.md"
+  ],
+  "agent_skills": [
+    ".agents/skills/execute-governed-change.md",
+    ".agents/skills/review-governed-change.md"
+  ],
+  "conflict_policy": "BLOCKED: do not choose between unresolved authoritative conflicts",
+  "runtime_governance_separation": "runtime must not depend on .harness or .agents"
 }

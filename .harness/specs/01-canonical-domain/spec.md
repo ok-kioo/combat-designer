@@ -110,7 +110,7 @@ confidence
 
 ## Impacto
 
-Canonical model afeta ingestion, KG, simulator, gate, MCP e UI.
+Canonical model afeta ingestion, KG, simulator, combat analysis, MCP e UI.
 
 ## Testes
 

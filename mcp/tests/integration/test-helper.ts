@@ -1,6 +1,6 @@
 import type {
   SimulationPort,
-  MechanicalGatePort,
+  CombatAnalysisPort,
   CombatQueryPort,
   ChangeSetRepositoryPort,
   AttackSummary,
@@ -13,7 +13,7 @@ import type {
   SimulationInput,
   SimulationOutput,
   VerificationRequest,
-  GateResult,
+  CombatAnalysisResult,
   ChangeSetProposal,
 } from "@combat-designer/backend";
 import { ApplicationAdapter } from "../../server/src/adapters/application-adapter.js";
@@ -160,46 +160,21 @@ export class MockSimulatorAdapter implements SimulationPort {
   }
 }
 
-export class MockMechanicalGateAdapter implements MechanicalGatePort {
-  public shouldFail = false;
-  public customVerdict?: any;
+export class MockCombatAnalysisAdapter implements CombatAnalysisPort {
+  public findings: any[] = [];
+  public customStatus?: any;
 
-  async verify(request: VerificationRequest, simulation: SimulationOutput): Promise<GateResult> {
-    const verdict = this.customVerdict ?? (this.shouldFail ? "FAIL" : "PASS");
+  async analyze(request: VerificationRequest, simulation: SimulationOutput): Promise<CombatAnalysisResult> {
+    const status = this.customStatus ?? "COMPLETED";
     return {
-      gate_run_id: "gate_run_mock_777",
+      analysis_id: "analysis_mock_777",
       workspace_id: request.workspace_id ?? "ws-alpha",
       project_revision: request.project_revision ?? "rev-1",
-      canonical_snapshot_hash: request.canonical_snapshot_hash ?? "snap_hash",
-      simulation_input_hash: request.simulation_input_hash ?? "sim_hash",
-      simulation_state_hash: simulation?.final_state_hash ?? "mock_state_hash",
-      event_log_hash: "mock_event_log_hash_888",
-      verification_profile: request.verification_profile?.kind ?? "strict",
-      rule_set_version: request.rule_set_version ?? "1.0.0",
-      verifier_version: request.verifier_version ?? "1.0.0",
-      verdict,
-      checks: [
-        {
-          rule_id: "G01_SIMULATION_INTEGRITY",
-          scenario_id: "sc_1",
-          status: verdict === "PASS" ? "PASS" : "FAIL",
-          threshold: 0,
-          observed: 0,
-          expected: "Valid",
-          message: verdict === "PASS" ? "Integrity passed" : "Integrity violated",
-        },
-      ],
-      violations: verdict === "PASS" ? [] : ["INFINITE_STUN_LOOP"],
-      evidence: [],
-      budgets: {
-        exhausted: false,
-        events_analyzed: 10,
-        states_explored: 5,
-        cycles_checked: 0,
-        steps_taken: 15,
-        evidence_count: 0,
-      },
-      gate_result_hash: "mock_gate_result_hash_999999999999999999999999999999999999999999999999",
+      status,
+      findings: this.findings,
+      recommendations: [],
+      evidence_count: 0,
+      analyzed_at: new Date().toISOString(),
     };
   }
 }
@@ -208,13 +183,13 @@ export function createTestEnvironment() {
   const changesetRepo = new InMemoryChangeSetRepo();
   const queryPort = new MockCombatQueryAdapter();
   const simulationPort = new MockSimulatorAdapter();
-  const gatePort = new MockMechanicalGateAdapter();
+  const analysisPort = new MockCombatAnalysisAdapter();
 
   const adapter = new ApplicationAdapter({
     changesetRepo,
     queryPort,
     simulationPort,
-    gatePort,
+    analysisPort,
   });
 
   const gateway = new McpGatewayRouter();
@@ -227,11 +202,9 @@ export function createTestEnvironment() {
       "combat:read",
       "combat:query",
       "combat:simulate",
-      "combat:verify",
+      "combat:analyze",
       "combat:propose",
       "changeset:withdraw",
-      "changeset:approve",
-      "changeset:apply",
     ],
     authorized_workspaces: ["ws-alpha"],
   };
@@ -243,7 +216,7 @@ export function createTestEnvironment() {
       "combat:read",
       "combat:query",
       "combat:simulate",
-      "combat:verify",
+      "combat:analyze",
       "combat:propose",
       "changeset:withdraw",
     ],
@@ -261,7 +234,7 @@ export function createTestEnvironment() {
     changesetRepo,
     queryPort,
     simulationPort,
-    gatePort,
+    analysisPort,
     adapter,
     gateway,
     server,

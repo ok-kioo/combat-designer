@@ -71,12 +71,16 @@ function createMockPorts(overrides: Partial<ChatOrchestratorPorts> = {}): ChatOr
         metrics: { total_frames: 120, damage: 25, hits: 1, misses: 0 },
       }),
     } as any,
-    gatePort: {
-      verify: vi.fn().mockResolvedValue({
-        gate_run_id: "gate_run_001",
-        verdict: "PASS",
-        gate_result_hash: "hash_gate_001",
-        violations: [],
+    analysisPort: {
+      analyze: vi.fn().mockResolvedValue({
+        analysis_id: "an_001",
+        workspace_id: "ws_func_test",
+        project_revision: "rev-1",
+        status: "COMPLETED",
+        findings: [],
+        recommendations: [],
+        evidence_count: 0,
+        analyzed_at: new Date().toISOString(),
       }),
     } as any,
     saveChangeset: vi.fn(),
@@ -165,7 +169,7 @@ describe("SPEC 13 — Functional Test Suite (13.T.1 – 13.T.20)", () => {
     expect(res.activities).toHaveLength(0);
     expect(ports.queryPort!.searchAttacks).not.toHaveBeenCalled();
     expect(ports.simulationPort!.simulate).not.toHaveBeenCalled();
-    expect(ports.gatePort!.verify).not.toHaveBeenCalled();
+    expect(ports.analysisPort!.analyze).not.toHaveBeenCalled();
     expect(mockLlm.chat).not.toHaveBeenCalled();
   });
 
@@ -345,33 +349,33 @@ describe("SPEC 13 — Functional Test Suite (13.T.1 – 13.T.20)", () => {
     expect((res.tool_calls[0].output as any).status).toBe("PROPOSED");
   });
 
-  // 13.T.12 — Mechanical Validator integration
-  it("13.T.12: Executes Mechanical Validator through authoritative port and records verdict", async () => {
+  // 13.T.12 — Combat Analysis integration
+  it("13.T.12: Executes Combat Analysis through authoritative port and records findings", async () => {
     const ports = createMockPorts();
     const mockLlm: LlmProvider = {
       chat: vi.fn().mockImplementation(async ({ tool_results }) => {
         if (!tool_results || tool_results.length === 0) {
           return {
             text: null,
-            function_calls: [{ name: "combat_verify", args: { project_id: "proj_1" } }],
+            function_calls: [{ name: "combat_analyze", args: { subject: "Security check" } }],
             finished: false,
           };
         }
-        return { text: "Validação concluída: PASS", function_calls: [], finished: true };
+        return { text: "Análise concluída: COMPLETED", function_calls: [], finished: true };
       }),
     };
 
     const orchestrator = new ChatOrchestrator(mockLlm, ports);
     const res = await orchestrator.processMessage({
       workspace_id: workspaceId,
-      user_prompt: "Verifique a segurança mecânica",
+      user_prompt: "Analise a segurança mecânica",
       snapshot_hash: "snap_1",
       selected_attack_ids: [],
       timestamp: new Date().toISOString(),
     });
 
-    expect(ports.gatePort!.verify).toHaveBeenCalledTimes(1);
-    expect((res.tool_calls[0].output as any).verdict).toBe("PASS");
+    expect(ports.analysisPort!.analyze).toHaveBeenCalledTimes(1);
+    expect((res.tool_calls[0].output as any).status).toBe("COMPLETED");
   });
 
   // 13.T.13 — Spec Validator integration

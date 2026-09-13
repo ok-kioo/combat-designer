@@ -1,0 +1,42 @@
+# Rule — External Input and Platform Security
+
+**Rule ID:** SEC-INPUT-001  
+**Severity:** MUST
+
+## Scope
+
+Applies to imported bundles, uploaded files, external source/export data, web/API payloads, model-provided arguments, and any text/data crossing a trust boundary.
+
+## Invariants
+
+1. Prefer explicit exported data contracts over arbitrary direct filesystem/project-root access.
+2. Enforce payload size, recursion/depth, item count, and execution budgets before expensive processing.
+3. Validate the outer envelope before per-item normalization.
+4. Distinguish envelope failure from item-level failure:
+   - invalid envelope MAY reject the whole request;
+   - isolated invalid items SHOULD be quarantined when safe partial processing is a declared capability.
+5. Preserve provenance for accepted, normalized, inferred, conflicted, and quarantined data.
+6. Imported labels/comments/free text are untrusted data. Sanitization is defense-in-depth, not a security boundary.
+7. Prompt delimiters/tags are semantic formatting only; they do not make untrusted text safe.
+8. Scope/tenant/project isolation MUST be enforced on every persistence, read-model, query, tool, and cache path that can cross principals.
+9. Search/simulation/solver workloads MUST have explicit budgets and an explicit incomplete outcome.
+10. Security-relevant failure MUST fail closed.
+11. Secrets, credentials, tokens, private keys, and password material MUST NOT enter model context, telemetry, or user-visible diagnostics.
+
+## Technology choice rule
+
+Do not replace the project's established stack merely because another framework provides a familiar validation/security feature. Preserve stack decisions unless a project-specific requirement explicitly authorizes migration; implement equivalent controls in the selected stack.
+
+## Verification minimum
+
+Test at least:
+
+- oversized payload;
+- malformed envelope;
+- isolated malformed item;
+- adversarial untrusted text;
+- valid internationalized text;
+- cross-scope identifier collision;
+- authorization failure;
+- budget exhaustion;
+- secret redaction.

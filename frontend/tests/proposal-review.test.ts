@@ -1,17 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
-import { ChangeSetReviewController } from "../features/changeset-review/components/ChangeSetReview.js";
+import { ProposalReviewController } from "../features/proposal-review/components/ProposalReview.js";
 import { ApiClient } from "../shared/services/api-client.js";
 
-describe("SPEC 10 — ChangeSet Review UI (10.UI.6 - 10.UI.7)", () => {
+describe("SPEC 10 — Suggested Adjustment & Proposal Review UI (10.UI.6 - 10.UI.7)", () => {
   const workspaceId = "ws-review-alpha";
 
-  it("10.UI.6: ChangeSetReview parses and renders mutation diffs correctly", async () => {
+  it("10.UI.6: ProposalReview parses and renders mutation diffs correctly", async () => {
     const mockApiClient = new ApiClient();
-    mockApiClient.getChangeSets = vi.fn().mockResolvedValue({
+    mockApiClient.getProposals = vi.fn().mockResolvedValue({
       count: 1,
-      changesets: [
+      proposals: [
         {
-          changeset_id: "cs_buff_1",
+          id: "prop_buff_1",
+          proposal_id: "prop_buff_1",
           workspace_id: workspaceId,
           base_revision: "rev-1",
           target_revision: "rev-2",
@@ -31,20 +32,20 @@ describe("SPEC 10 — ChangeSet Review UI (10.UI.6 - 10.UI.7)", () => {
       ],
     });
 
-    const review = new ChangeSetReviewController({
+    const review = new ProposalReviewController({
       workspaceId,
       apiClient: mockApiClient,
     });
 
-    const loaded = await review.loadChangeSets();
+    const loaded = await review.loadProposals();
     expect(loaded.length).toBe(1);
 
     const model = review.renderModel();
-    expect(model.selectedChangesetId).toBe("cs_buff_1");
-    expect(model.selectedChangeset?.diffs.length).toBe(1);
-    expect(model.selectedChangeset?.diffs[0].field).toBe("damage");
-    expect(model.selectedChangeset?.diffs[0].current_value).toBe(25);
-    expect(model.selectedChangeset?.diffs[0].proposed_value).toBe(40);
+    expect(model.selectedProposalId).toBe("prop_buff_1");
+    expect(model.selectedProposal?.diffs.length).toBe(1);
+    expect(model.selectedProposal?.diffs[0].field).toBe("damage");
+    expect(model.selectedProposal?.diffs[0].current_value).toBe(25);
+    expect(model.selectedProposal?.diffs[0].proposed_value).toBe(40);
 
     const html = review.renderHtml();
     expect(html).toContain("atk_light_punch");
@@ -53,33 +54,12 @@ describe("SPEC 10 — ChangeSet Review UI (10.UI.6 - 10.UI.7)", () => {
     expect(html).toContain("Boost early frame utility");
   });
 
-  it("10.UI.7: ChangeSetReview executes approval, application with Gate PASS, and withdrawal", async () => {
+  it("10.UI.7: ProposalReview inspects proposal and executes withdrawal", async () => {
     const mockApiClient = new ApiClient();
-    mockApiClient.approveChangeSet = vi.fn().mockResolvedValue({
-      changeset: {
-        changeset_id: "cs_1",
-        workspace_id: workspaceId,
-        status: "approved",
-        target_revision: "rev-2",
-        mutations: [],
-        created_at: new Date().toISOString(),
-      },
-    });
-
-    mockApiClient.applyChangeSet = vi.fn().mockResolvedValue({
-      changeset: {
-        changeset_id: "cs_1",
-        workspace_id: workspaceId,
-        status: "applied",
-        target_revision: "rev-2",
-        mutations: [],
-        created_at: new Date().toISOString(),
-      },
-    });
-
-    mockApiClient.withdrawChangeSet = vi.fn().mockResolvedValue({
-      changeset: {
-        changeset_id: "cs_1",
+    mockApiClient.withdrawProposal = vi.fn().mockResolvedValue({
+      proposal: {
+        id: "prop_1",
+        proposal_id: "prop_1",
         workspace_id: workspaceId,
         status: "withdrawn",
         target_revision: "rev-2",
@@ -88,12 +68,13 @@ describe("SPEC 10 — ChangeSet Review UI (10.UI.6 - 10.UI.7)", () => {
       },
     });
 
-    const review = new ChangeSetReviewController({
+    const review = new ProposalReviewController({
       workspaceId,
       apiClient: mockApiClient,
-      initialChangesets: [
+      initialProposals: [
         {
-          changeset_id: "cs_1",
+          id: "prop_1",
+          proposal_id: "prop_1",
           workspace_id: workspaceId,
           status: "proposed",
           target_revision: "rev-2",
@@ -103,18 +84,12 @@ describe("SPEC 10 — ChangeSet Review UI (10.UI.6 - 10.UI.7)", () => {
       ],
     });
 
-    // Approve
-    const approved = await review.approveChangeset("cs_1", "lead_designer");
-    expect(approved.status).toBe("approved");
-    expect(mockApiClient.approveChangeSet).toHaveBeenCalledWith(workspaceId, "cs_1", "lead_designer");
-
-    // Apply with Gate PASS
-    const applied = await review.applyChangeset("cs_1", { verdict: "PASS" });
-    expect(applied.status).toBe("applied");
-    expect(mockApiClient.applyChangeSet).toHaveBeenCalledWith(workspaceId, "cs_1", { verdict: "PASS" });
+    review.selectProposal("prop_1");
+    expect(review.getSelectedProposal()?.status).toBe("proposed");
 
     // Withdraw
-    const withdrawn = await review.withdrawChangeset("cs_1", "Testing withdrawal");
+    const withdrawn = await review.withdrawProposal("prop_1", "Testing withdrawal");
     expect(withdrawn.status).toBe("withdrawn");
+    expect(mockApiClient.withdrawProposal).toHaveBeenCalledWith(workspaceId, "prop_1", "Testing withdrawal");
   });
 });

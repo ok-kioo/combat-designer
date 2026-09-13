@@ -10,15 +10,14 @@ LLM           = INTENTION    ("Quero aumentar o startup do slash")
 MCP Gateway   = CAN I?       (Verifica autenticação, capabilities, workspace isolation, policy)
 MCP Server    = TRANSLATE    (Mapeia tools MCP para casos de uso da Application)
 Application   = IS VALID?    (Valida integridade do input, autorização de workspace, orquestra portas)
-Simulator     = WHAT HAPPENS?(Calcula o resultado mecânico frame a frame, sem julgar segurança)
-Gate (Spec 05)= IS SAFE?     (Aplica regras de aceitação mecânica, FIC e invariantes)
-Human         = DECISION     (Aprova ou rejeita a alteração)
-Persistence   = RECORD       (Grava o resultado aprovado)
+Simulator     = WHAT HAPPENS?(Calcula o resultado mecânico frame a frame)
+Analysis (Spec 05) = WHAT IS OBSERVED? (Diagnostica problemas mecânicos e emite Findings)
+Director (Spec 13) = WHAT TO DO?  (Formula recomendações consultivas)
 ```
 
 ### Invariantes Fundamentais:
 1. **Pergunta Única: "WHAT HAPPENS?"**:
-   - O Simulator **nunca** decide se um resultado é válido, seguro ou aceitável. Ele apenas relata o que acontece. A decisão mecânica pertence estritamente ao **Mechanical Gate (SPEC 05)**.
+   - O Simulator **nunca** decide se um resultado é válido, seguro ou aceitável. Ele apenas relata o que acontece. A interpretação analítica e diagnóstica pertence à **Combat Analysis (SPEC 05)** e ao **Combat Director (SPEC 13)**.
 2. **Determinismo Estrito**:
    - 100 execuções do mesmo cenário de combate com os mesmos inputs produzem byte-a-byte o mesmo `StateHash` e a mesma sequência de eventos.
 3. **Tempo Discreto via `FrameClock`**:

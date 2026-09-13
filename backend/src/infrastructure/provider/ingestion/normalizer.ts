@@ -266,6 +266,9 @@ export function normalizeRawItem(
     }
   }
   const uniqueSortedTags = Array.from(new Set(tagList)).sort();
+  const rawCharId = p.characterId ?? p.character_id ?? p.character ?? p.characterName;
+  const characterId = typeof rawCharId === "string" && rawCharId.trim().length > 0 ? sanitizeText(rawCharId) : null;
+  const assignmentStatus = characterId ? ("ASSIGNED" as const) : ("UNASSIGNED" as const);
 
   return {
     attack: {
@@ -290,6 +293,8 @@ export function normalizeRawItem(
       hitboxes,
       cancels,
       tags: uniqueSortedTags,
+      character_id: characterId,
+      assignment_status: assignmentStatus,
       provenance: {
         engine,
         project_revision: item.project_revision,

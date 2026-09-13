@@ -173,24 +173,23 @@ describe("SPEC 10 — Frontend REST Routes Integration Tests (10.T.1 - 10.T.10)"
     expect(state.history.some((h) => h.type === "simulation" && h.id === "sc_duel_1")).toBe(true);
   });
 
-  it("10.T.4: POST /verifications executes mechanical gate verification and records verdict", async () => {
-    const res = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/verifications`, {
+  it("10.T.4: POST /analyses executes combat analysis and records run in workspace history", async () => {
+    const res = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/analyses`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-authorized-workspaces": workspaceId,
       },
       body: JSON.stringify({
-        verification_request: { workspace_id: workspaceId },
-        simulation_output: {},
+        subject: "Stun Loop Test",
       }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.gate_result.verdict).toBe("PASS");
+    expect(body.id).toBeDefined();
 
     const state = server.getWorkspaceState(workspaceId);
-    expect(state.history.some((h) => h.type === "gate_run" && h.verdict === "PASS")).toBe(true);
+    expect(state.history.some((h) => h.type === "analysis")).toBe(true);
   });
 
   it("10.T.5: POST /changesets proposes and GET /changesets lists proposals", async () => {
@@ -233,90 +232,37 @@ describe("SPEC 10 — Frontend REST Routes Integration Tests (10.T.1 - 10.T.10)"
     expect(single.changeset.changeset_id).toBe(csId);
   });
 
-  it("10.T.6: POST /changesets/:id/approve records approval", async () => {
-    // Propose first
-    server.saveChangeset({
-      changeset_id: "cs_to_approve",
-      workspace_id: workspaceId,
-      base_revision: "rev-01",
-      target_revision: "rev-02",
-      proposed_by: "designer",
-      status: "proposed",
-      mutations: [],
-      created_at: new Date().toISOString(),
-    });
-
-    const approveRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets/cs_to_approve/approve`, {
+  it("10.T.6: Disallows direct runtime mutations on changesets", async () => {
+    const res = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets/cs_any/mutate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-authorized-workspaces": workspaceId,
       },
-      body: JSON.stringify({ approver_id: "lead_designer" }),
+      body: JSON.stringify({}),
     });
-    expect(approveRes.status).toBe(200);
-    const body = await approveRes.json();
-    expect(body.status).toBe("APPROVED");
-    expect(body.changeset.status).toBe("approved");
-    expect(body.changeset.approved_by).toBe("lead_designer");
+    expect(res.status).toBe(404);
   });
 
-  it("10.T.7: POST /changesets/:id/apply requires approved status and GateResult PASS", async () => {
-    server.saveChangeset({
-      changeset_id: "cs_to_apply",
+  it("10.T.7: Proposes changeset as purely consultative record", async () => {
+    const cs = {
+      changeset_id: "cs_consultative",
       workspace_id: workspaceId,
       base_revision: "rev-01",
       target_revision: "rev-02",
       proposed_by: "designer",
-      status: "proposed", // NOT yet approved!
+      status: "proposed" as const,
       mutations: [],
       created_at: new Date().toISOString(),
-    });
-
-    // Try applying unapproved -> should fail
-    const unapprovedRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets/cs_to_apply/apply`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-authorized-workspaces": workspaceId,
-      },
-      body: JSON.stringify({ gate_result: { verdict: "PASS" } }),
-    });
-    expect(unapprovedRes.status).toBe(400);
-
-    // Approve it
-    const cs = server.getChangesetById(workspaceId, "cs_to_apply")!;
-    cs.status = "approved";
+    };
     server.saveChangeset(cs);
 
-    // Try applying with FAIL gate result -> should fail
-    const failGateRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets/cs_to_apply/apply`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-authorized-workspaces": workspaceId,
-      },
-      body: JSON.stringify({ gate_result: { verdict: "FAIL" } }),
+    const getRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets/cs_consultative`, {
+      headers: { "x-authorized-workspaces": workspaceId },
     });
-    expect(failGateRes.status).toBe(400);
-
-    // Apply with PASS gate result -> succeeds
-    const passGateRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets/cs_to_apply/apply`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-authorized-workspaces": workspaceId,
-      },
-      body: JSON.stringify({ gate_result: { verdict: "PASS" } }),
-    });
-    expect(passGateRes.status).toBe(200);
-    const passBody = await passGateRes.json();
-    expect(passBody.status).toBe("APPLIED");
-    expect(passBody.changeset.status).toBe("applied");
-
-    // Workspace latest_revision updated
-    const state = server.getWorkspaceState(workspaceId);
-    expect(state.latest_revision).toBe("rev-02");
+    expect(getRes.status).toBe(200);
+    const body = await getRes.json();
+    expect(body.changeset.status).toBe("proposed");
   });
 
   it("10.T.8: POST /changesets/:id/withdraw withdraws proposal", async () => {

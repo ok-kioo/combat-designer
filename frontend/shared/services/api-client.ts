@@ -1,3 +1,7 @@
+export class ApiError extends Error {
+  constructor(public readonly status: number, message: string) { super(message); }
+}
+
 export interface ApiClientConfig {
   baseUrl?: string;
   defaultAuthorizedWorkspaces?: string[];
@@ -11,15 +15,49 @@ export class ApiClient {
   private authToken: string | null = null;
   private refreshToken: string | null = null;
 
-  constructor(config: ApiClientConfig = {}) {
-    this.baseUrl = config.baseUrl ?? "";
-    this.defaultAuthorizedWorkspaces = config.defaultAuthorizedWorkspaces ?? [];
-    this.authToken = config.authToken ?? null;
-    this.refreshToken = config.refreshToken ?? null;
+  constructor(config: ApiClientConfig | string = {}) {
+    if (typeof config === "string") {
+      this.baseUrl = config;
+      this.defaultAuthorizedWorkspaces = [];
+      this.authToken = null;
+      this.refreshToken = null;
+    } else {
+      this.baseUrl = config.baseUrl ?? "";
+      this.defaultAuthorizedWorkspaces = config.defaultAuthorizedWorkspaces ?? [];
+      this.authToken = config.authToken ?? null;
+      this.refreshToken = config.refreshToken ?? null;
+    }
+  }
+
+  /** Shared transport for routed feature pages. Authorization is enforced by the API. */
+  public onUnauthorized?: () => void;
+
+  public async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      ...options,
+      headers: { ...this.getHeaders(), ...options.headers },
+    });
+    if (!response.ok) {
+      if (response.status === 401) this.onUnauthorized?.();
+      // Never surface server internals or principal identifiers in product errors.
+      throw new ApiError(response.status, response.status === 403 || response.status === 404
+        ? "Este recurso não está disponível ou você não possui acesso."
+        : "Não foi possível concluir a solicitação. Tente novamente.");
+    }
+    return response.status === 204 ? undefined as T : response.json();
+  }
+
+  public getBaseUrl(): string {
+    return this.baseUrl;
   }
 
   public setAuthToken(token: string | null): void {
     this.authToken = token;
+  }
+
+  public clearAuthToken(): void {
+    this.authToken = null;
+    this.refreshToken = null;
   }
 
   public getAuthToken(): string | null {
@@ -56,13 +94,13 @@ export class ApiClient {
     return headers;
   }
 
-  public async login(credentials: { email: string; password: string }): Promise<{
+  public async login(credentials: { username?: string; email?: string; password: string }): Promise<{
     access_token: string;
     refresh_token: string;
     token_type: string;
     expires_in: number;
     user: any;
-    workspace_ids: string[];
+    workspace_ids?: string[];
   }> {
     const res = await fetch(`${this.baseUrl}/api/auth/login`, {
       method: "POST",
@@ -77,9 +115,11 @@ export class ApiClient {
   }
 
   public async register(payload: {
-    email: string;
+    username?: string;
+    email?: string;
     password: string;
-    name: string;
+    display_name?: string;
+    name?: string;
     workspace_id?: string;
     role?: string;
   }): Promise<any> {
@@ -204,82 +244,51 @@ export class ApiClient {
     return res.json();
   }
 
-  public async verify(workspaceId: string, verificationRequest: any, simulationOutput: any): Promise<any> {
-    const res = await fetch(`${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/verifications`, {
+  public async analyzeCombat(workspaceId: string, analysisRequest: any): Promise<any> {
+    const res = await fetch(`${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/analyses`, {
       method: "POST",
       headers: this.getHeaders(workspaceId),
-      body: JSON.stringify({
-        verification_request: verificationRequest,
-        simulation_output: simulationOutput,
-      }),
+      body: JSON.stringify(analysisRequest),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: Verification failed`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Analysis failed`);
     return res.json();
   }
 
-  public async getChangeSets(workspaceId: string): Promise<{ count: number; changesets: any[] }> {
-    const res = await fetch(`${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/changesets`, {
+  public async getProposals(workspaceId: string): Promise<{ count: number; proposals: any[]; changesets: any[] }> {
+    const res = await fetch(`${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/proposals`, {
       method: "GET",
       headers: this.getHeaders(workspaceId),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch changesets`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch proposals`);
     return res.json();
   }
 
-  public async getChangeSet(workspaceId: string, changesetId: string): Promise<{ changeset: any }> {
+  public async getProposal(workspaceId: string, proposalId: string): Promise<{ proposal: any; changeset: any }> {
     const res = await fetch(
-      `${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/changesets/${encodeURIComponent(changesetId)}`,
+      `${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/proposals/${encodeURIComponent(proposalId)}`,
       {
         method: "GET",
         headers: this.getHeaders(workspaceId),
       }
     );
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ChangeSet not found`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Proposal not found`);
     return res.json();
   }
 
-  public async proposeChangeSet(workspaceId: string, proposal: any): Promise<any> {
-    const res = await fetch(`${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/changesets`, {
+  public async proposeAdjustment(workspaceId: string, proposal: any): Promise<any> {
+    const res = await fetch(`${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/proposals`, {
       method: "POST",
       headers: this.getHeaders(workspaceId),
       body: JSON.stringify(proposal),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}: Proposing changeset failed`);
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}: Proposing adjustment failed`);
     return data;
   }
 
-  public async approveChangeSet(workspaceId: string, changesetId: string, approverId = "human_lead"): Promise<any> {
+  public async withdrawProposal(workspaceId: string, proposalId: string, reason?: string): Promise<any> {
     const res = await fetch(
-      `${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/changesets/${encodeURIComponent(changesetId)}/approve`,
-      {
-        method: "POST",
-        headers: this.getHeaders(workspaceId),
-        body: JSON.stringify({ approver_id: approverId }),
-      }
-    );
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}: Approving changeset failed`);
-    return data;
-  }
-
-  public async applyChangeSet(workspaceId: string, changesetId: string, gateResult: any): Promise<any> {
-    const res = await fetch(
-      `${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/changesets/${encodeURIComponent(changesetId)}/apply`,
-      {
-        method: "POST",
-        headers: this.getHeaders(workspaceId),
-        body: JSON.stringify({ gate_result: gateResult }),
-      }
-    );
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}: Applying changeset failed`);
-    return data;
-  }
-
-  public async withdrawChangeSet(workspaceId: string, changesetId: string, reason?: string): Promise<any> {
-    const res = await fetch(
-      `${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/changesets/${encodeURIComponent(changesetId)}/withdraw`,
+      `${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/proposals/${encodeURIComponent(proposalId)}/withdraw`,
       {
         method: "POST",
         headers: this.getHeaders(workspaceId),
@@ -287,8 +296,25 @@ export class ApiClient {
       }
     );
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}: Withdrawing changeset failed`);
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}: Withdrawing proposal failed`);
     return data;
+  }
+
+  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility aliases
+  public async getChangeSets(workspaceId: string): Promise<{ count: number; changesets: any[]; proposals: any[] }> {
+    return this.getProposals(workspaceId);
+  }
+
+  public async getChangeSet(workspaceId: string, changesetId: string): Promise<{ changeset: any; proposal: any }> {
+    return this.getProposal(workspaceId, changesetId);
+  }
+
+  public async proposeChangeSet(workspaceId: string, proposal: any): Promise<any> {
+    return this.proposeAdjustment(workspaceId, proposal);
+  }
+
+  public async withdrawChangeSet(workspaceId: string, changesetId: string, reason?: string): Promise<any> {
+    return this.withdrawProposal(workspaceId, changesetId, reason);
   }
 
   public async sendChatMessage(

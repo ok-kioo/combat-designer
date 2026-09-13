@@ -71,6 +71,8 @@ export const CanonicalAttackSchema = z.object({
   hitboxes: z.array(CanonicalHitboxSchema).default([]),
   cancels: z.array(CanonicalCancelRuleSchema).default([]),
   tags: z.array(z.string()).default([]),
+  character_id: z.string().nullable().default(null),
+  assignment_status: z.enum(["ASSIGNED", "UNASSIGNED"]).default("UNASSIGNED"),
   provenance: CanonicalProvenanceSchema,
 });
 

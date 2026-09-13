@@ -363,15 +363,15 @@ describe("SPEC 08 — Functional Tests (08.T.1 – 08.T.15)", () => {
     expect(statusRes.status).toBe(403);
   });
 
-  it("08.T.13: Workspace state records gate run and simulation history correctly", () => {
-    server.recordGateRun(validWorkspaceId, "gate-run-101", "PASS");
+  it("08.T.13: Workspace state records analysis run and simulation history correctly", () => {
+    server.recordAnalysisRun(validWorkspaceId, "analysis-run-101", "COMPLETED");
     server.recordSimulation(validWorkspaceId, "sim-202");
 
     const state = server.getWorkspaceState(validWorkspaceId);
     expect(state.history.length).toBe(2);
     expect(state.history[0].type).toBe("simulation");
-    expect(state.history[1].type).toBe("gate_run");
-    expect(state.history[1].verdict).toBe("PASS");
+    expect(state.history[1].type).toBe("analysis");
+    expect(state.history[1].status).toBe("COMPLETED");
   });
 
   it("08.T.14: Workspace mismatch between route param and manifest rejected with 400", async () => {

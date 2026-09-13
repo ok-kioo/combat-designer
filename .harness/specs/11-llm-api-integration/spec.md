@@ -21,12 +21,12 @@ O sistema dispõe de motores de domínio determinísticos (Rust crates), pipelin
    - A LLM processa os resultados e gera a resposta final
    - Máximo de 5 rounds (`MAX_TOOL_CALL_ROUNDS`) para evitar loops infinitos
 
-3. **Preservação de Vereditos Mecânicos**: Vereditos do Mechanical Gate (`PASS`, `FAIL`, `BLOCKED`, `STALE`, `BUDGET_EXCEEDED`) retornados por `combat_verify` são preservados integralmente. A LLM não pode fabricar ou sobrescrever esses vereditos.
+3. **Preservação de Fatos Mecânicos e Resultados de Análise**: Resultados determinísticos de simulação (`SimulationOutput`) e diagnósticos de combate (`AnalysisResult`, contendo `Finding[]` e evidências) são produzidos exclusivamente pelos motores de domínio e simulação. A LLM não pode inventar ou sobrescrever simulações ou diagnósticos mecânicos.
 
-4. **Fluxo Consultivo Canônico (Alinhamento SPEC 13)**:
-   - A LLM atua exclusivamente como assistente de análise no pipeline:
-     `User Request → Skill → Authorized Tools → Proposal → Simulation → Mechanical Validation → Spec Validation → Recommendation`.
-   - NUNCA existe ferramenta `combat_apply_change` ou aprovação direta de mudanças pelo assistente.
+4. **Fluxo Consultivo Canônico (Alinhamento SPEC 13 e SPEC 14)**:
+   - A LLM atua exclusivamente como assistente de análise e recomendação no pipeline:
+     `User Request → Skill → Authorized Tools → Simulation / Combat Analysis → Findings + Evidence → Recommendation`.
+   - NUNCA existe ferramenta `combat_apply_change` ou mutação direta de assets da engine.
    - Ferramentas autorizadas são restritas por allowlist da Skill ativa (`SkillRegistry`).
    - Requisições fora de escopo (`OUT_OF_SCOPE`) são rejeitadas imediatamente sem acionar ferramentas ou simulações.
 
@@ -70,17 +70,15 @@ Tool Execution Loop (max 5 rounds)
   │ 5. Backend executa cada tool call:
   │    - combat_search → queryPort.search()
   │    - combat_simulate → simulationPort.simulate()
-  │    - combat_verify → gatePort.verify()
-  │    - combat_propose_change → saveChangeset()
-  │    - combat_explain_gate → gate explanation
+  │    - combat_analyze → analysisPort.analyze()
   │    - combat_impact_analysis → impact data
   │    - list_scenarios → scenario listing
   │ 6. Resultados enviados de volta à LLM
   ▼
 Resposta Final
-  │ { reply, tool_calls[], proposed_changeset?, context_envelope }
+  │ { reply, tool_calls[], analysis_result?, context_envelope }
   ▼
-Frontend (renderiza resposta + tool call cards)
+Frontend (renderiza resposta + tool call cards + findings)
 ```
 
 ---
@@ -101,20 +99,21 @@ Frontend (renderiza resposta + tool call cards)
 |---|---|---|
 | `combat_search` | Busca ataques por query/tag/cancel window | Nenhum (todos opcionais) |
 | `combat_simulate` | Simulação determinística | `scenario_id` |
-| `combat_verify` | Verificação via Mechanical Gate | `project_id` |
-| `combat_propose_change` | Propõe ChangeSet | `base_revision`, `target_revision`, `mutations` |
-| `combat_explain_gate` | Explica veredito de Gate | `gate_run_id` |
-| `combat_impact_analysis` | Análise de impacto | `attack_id` |
+| `combat_analyze` | Análise mecânica e diagnósticos (Findings) | `workspace_id`, `project_id` |
+| `combat_impact_analysis` | Análise de impacto relacional | `attack_id` |
 | `list_scenarios` | Lista cenários | Nenhum |
+
+> [!WARNING]
+> Ferramentas históricas (`combat_verify`, `combat_explain_gate`, `combat_propose_change`, `combat_apply_change`) foram classificadas como `CODE_LEGACY_RUNTIME_GATE` / `MUST_REMOVE_NOW` e desconectadas do catálogo de tools ativas.
 
 ---
 
 ## 5. System Prompt do Combat Director
 
 O system prompt é construído dinamicamente para cada turno, incluindo:
-- Workspace ID, snapshot hash, ataques selecionados, changeset ativo
-- Regras cardinais: não fabricar vereditos, não aprovar changesets, usar apenas o workspace autorizado
-- Workflow canônico: LLM propõe → Gateway autoriza → Application valida → Simulator calcula → Mechanical Gate decide → Human approva → Application aplica
+- Workspace ID, snapshot hash, ataques selecionados, contexto analítico
+- Regras cardinais: não fabricar simulações ou diagnósticos, não prometer mutações na Unity, usar apenas o workspace autorizado
+- Workflow canônico: User Request → Gateway autoriza → Simulator calcula → Combat Analysis diagnostica → Director recomenda
 
 ---
 

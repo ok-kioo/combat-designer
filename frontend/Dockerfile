@@ -12,6 +12,7 @@ RUN npm install --workspace=@combat-designer/frontend
 
 # Copy frontend source
 COPY frontend ./frontend
+RUN npm --workspace=@combat-designer/frontend run build
 
 ENV PORT=3000
 ENV NODE_ENV=production

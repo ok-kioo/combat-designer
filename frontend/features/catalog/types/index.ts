@@ -1,6 +1,8 @@
 export interface AttackItem {
   attack_id: string;
   name: string;
+  character_id?: string | null;
+  assignment_status?: "ASSIGNED" | "UNASSIGNED";
   startup_frames: number;
   active_frames: number;
   recovery_frames: number;
@@ -16,6 +18,7 @@ export interface AttackItem {
 export interface CatalogFilter {
   query?: string;
   tag?: string;
+  character_id?: string;
   minCancelWindow?: number;
 }
 

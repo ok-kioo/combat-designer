@@ -187,10 +187,10 @@ proptest! {
             verifier_version: "0.1.0".to_string(),
         };
 
-        let res1 = MechanicalVerifier::verify(&req, &sim);
-        let res2 = MechanicalVerifier::verify(&req, &sim);
+        let res1 = CombatVerifier::verify(&req, &sim);
+        let res2 = CombatVerifier::verify(&req, &sim);
 
-        prop_assert_eq!(res1.gate_result_hash, res2.gate_result_hash);
-        prop_assert_eq!(res1.verdict, res2.verdict);
+        prop_assert_eq!(res1.analysis_hash, res2.analysis_hash);
+        prop_assert_eq!(res1.status, res2.status);
     }
 }

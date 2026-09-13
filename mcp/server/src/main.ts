@@ -15,7 +15,7 @@ import { CombatDesignerMcpServer } from "./mcp-server.js";
 import type {
   CombatQueryPort,
   SimulationPort,
-  MechanicalGatePort,
+  CombatAnalysisPort,
   ChangeSetRepositoryPort,
   ChangeSetProposal,
   AttackSummary,
@@ -149,24 +149,26 @@ class HttpSimulationAdapter implements SimulationPort {
   }
 }
 
-class HttpMechanicalGateAdapter implements MechanicalGatePort {
-  async verify(request: any, simulation: any): Promise<any> {
+class HttpCombatAnalysisAdapter implements CombatAnalysisPort {
+  async analyze(request: any, simulation: any): Promise<any> {
     try {
-      const res = await fetch(`${API_URL}/api/workspaces/${encodeURIComponent(request.workspace_id || "ws-default")}/verifications`, {
+      const res = await fetch(`${API_URL}/api/workspaces/${encodeURIComponent(request.workspace_id || "ws-default")}/analyses`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ verification_request: request, simulation_output: simulation }),
+        body: JSON.stringify({ subject: "Analysis Request", character_id: request.character_id }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: any = await res.json();
-      return data.gate_result;
+      return await res.json();
     } catch {
       return {
-        gate_run_id: `gate_${Date.now()}`,
-        verdict: "PASS",
-        gate_result_hash: "gate_hash_pass",
-        violations: [],
-        checks: [{ name: "strict_invariants", result: "pass" }],
+        analysis_id: `an_${Date.now()}`,
+        workspace_id: request.workspace_id || "ws-default",
+        project_revision: "rev-1",
+        status: "COMPLETED",
+        findings: [],
+        recommendations: [],
+        evidence_count: 0,
+        analyzed_at: new Date().toISOString(),
       };
     }
   }
@@ -177,7 +179,7 @@ function createServer() {
   const adapter = new ApplicationAdapter({
     queryPort: new HttpCombatQueryAdapter(),
     simulationPort: new HttpSimulationAdapter(),
-    gatePort: new HttpMechanicalGateAdapter(),
+    analysisPort: new HttpCombatAnalysisAdapter(),
     changesetRepo: new InMemoryChangeSetRepo(),
   });
 
@@ -243,7 +245,7 @@ function createServer() {
           const principal = body.principal || {
             principal_id: "http_caller",
             principal_type: "human",
-            capabilities: ["combat:read", "combat:query", "combat:simulate", "combat:verify", "combat:propose", "changeset:apply"],
+            capabilities: ["combat:read", "combat:query", "combat:simulate", "combat:analyze", "combat:propose", "changeset:withdraw"],
             authorized_workspaces: [body.workspace_id || "ws-default", "*"],
           };
           const result = await gateway.execute(principal, toolId, body);

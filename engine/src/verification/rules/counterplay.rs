@@ -8,7 +8,7 @@ use crate::simulation::engine::SimulationOutput;
 use crate::verification::budget::VerificationBudgetTracker;
 use crate::verification::evidence::Evidence;
 use crate::verification::profile::VerificationProfile;
-use crate::verification::verdict::{CheckResult, CheckStatus};
+use crate::verification::report::{CheckResult, CheckStatus};
 use crate::verification::violations::ViolationCode;
 
 pub fn check_counterplay(

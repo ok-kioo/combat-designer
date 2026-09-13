@@ -100,15 +100,15 @@ fn test_05_t_1_safe_attack_passes() {
     let sim = make_valid_base_sim();
     let req = make_base_request(VerificationProfile::strict());
 
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
     assert_eq!(
-        result.verdict,
-        GateVerdict::Pass,
+        result.status,
+        AnalysisStatus::Clear,
         "Summary: {:?}",
         result.checks
     );
     assert!(result.violations.is_empty());
-    assert_eq!(result.gate_result_hash.len(), 64);
+    assert_eq!(result.analysis_hash.len(), 64);
 }
 
 #[test]
@@ -127,9 +127,9 @@ fn test_05_t_2_infinite_stun_loop_fails() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result.violations.contains(&ViolationCode::InfiniteStunLoop));
 }
 
@@ -151,9 +151,9 @@ fn test_05_t_3_sustained_dps_above_limit_fails() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result.violations.contains(&ViolationCode::MaxSustainedDps));
 }
 
@@ -175,7 +175,7 @@ fn test_05_t_4_sustained_dps_below_limit_passes() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
     let dps_check = result
         .checks
@@ -203,9 +203,9 @@ fn test_05_t_5_burst_above_limit_fails() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result.violations.contains(&ViolationCode::MaxBurst));
 }
 
@@ -227,7 +227,7 @@ fn test_05_t_6_burst_below_limit_passes() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
     let burst_check = result
         .checks
@@ -252,9 +252,9 @@ fn test_05_t_7_zero_risk_proven_fails() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result.violations.contains(&ViolationCode::ZeroRiskAttack));
 }
 
@@ -266,7 +266,7 @@ fn test_05_t_8_zero_risk_unprovable_in_strict_blocks() {
     sim.metrics.damage = 0;
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
     // In strict mode, zero-risk evaluation with no evidence is Inconclusive -> Blocked
     let zero_risk_check = result
@@ -275,7 +275,7 @@ fn test_05_t_8_zero_risk_unprovable_in_strict_blocks() {
         .find(|c| c.rule_id == "G10_ZERO_RISK_ATTACK")
         .unwrap();
     assert_eq!(zero_risk_check.status, CheckStatus::Inconclusive);
-    assert_eq!(result.verdict, GateVerdict::Blocked);
+    assert_eq!(result.status, AnalysisStatus::Blocked);
 }
 
 #[test]
@@ -294,7 +294,7 @@ fn test_05_t_9_counterplay_exists_passes() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
     let cp_check = result
         .checks
@@ -316,9 +316,9 @@ fn test_05_t_10_counterplay_absent_fails() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result.violations.contains(&ViolationCode::NoCounterplay));
 }
 
@@ -339,9 +339,9 @@ fn test_05_t_11_resource_loop_fails() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result.violations.contains(&ViolationCode::ResourceSafety));
 }
 
@@ -357,9 +357,9 @@ fn test_05_t_12_juggle_above_threshold_fails() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result.violations.contains(&ViolationCode::MaxJuggle));
 }
 
@@ -379,7 +379,7 @@ fn test_05_t_13_juggle_below_threshold_passes() {
     }
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
     let juggle_check = result
         .checks
@@ -397,9 +397,9 @@ fn test_05_t_14_invalid_cancel_fails() {
     sim.events.push(cancel_evt);
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result.violations.contains(&ViolationCode::CancelValidity));
 }
 
@@ -414,8 +414,8 @@ fn test_05_t_15_provenance_missing_in_strict_blocks() {
         }
     });
 
-    let result = MechanicalVerifier::verify(&req, &sim);
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    let result = CombatVerifier::verify(&req, &sim);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result
         .violations
         .contains(&ViolationCode::ProvenanceRequired));
@@ -439,9 +439,9 @@ fn test_05_t_16_guard_integrity_violation_fails() {
     sim.events.push(gb_evt);
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result.violations.contains(&ViolationCode::GuardIntegrity));
 }
 
@@ -458,8 +458,8 @@ fn test_05_t_17_verification_budget_exceeded() {
         max_evidence_items: 1,
     };
 
-    let result = MechanicalVerifier::verify(&req, &sim);
-    assert_eq!(result.verdict, GateVerdict::BudgetExceeded);
+    let result = CombatVerifier::verify(&req, &sim);
+    assert_eq!(result.status, AnalysisStatus::BudgetExceeded);
     assert!(result.violations.contains(&ViolationCode::ExecutionBudget));
 }
 
@@ -478,8 +478,8 @@ fn test_05_t_18_stale_snapshot_produces_stale_verdict() {
         verifier_version: req.verifier_version.clone(),
     };
 
-    let result = MechanicalVerifier::verify_with_baseline(&req, &sim, &baseline);
-    assert_eq!(result.verdict, GateVerdict::Stale);
+    let result = CombatVerifier::verify_with_baseline(&req, &sim, &baseline);
+    assert_eq!(result.status, AnalysisStatus::Stale);
     assert!(result.violations.contains(&ViolationCode::StaleRevision));
 }
 
@@ -488,11 +488,11 @@ fn test_05_t_19_deterministic_repeated_verification_100_runs() {
     let sim = make_valid_base_sim();
     let req = make_base_request(VerificationProfile::strict());
 
-    let first = MechanicalVerifier::verify(&req, &sim);
+    let first = CombatVerifier::verify(&req, &sim);
     for _ in 0..100 {
-        let current = MechanicalVerifier::verify(&req, &sim);
-        assert_eq!(first.verdict, current.verdict);
-        assert_eq!(first.gate_result_hash, current.gate_result_hash);
+        let current = CombatVerifier::verify(&req, &sim);
+        assert_eq!(first.status, current.status);
+        assert_eq!(first.analysis_hash, current.analysis_hash);
         assert_eq!(first.violations, current.violations);
         assert_eq!(first.checks.len(), current.checks.len());
         assert_eq!(first.evidence.len(), current.evidence.len());
@@ -500,15 +500,15 @@ fn test_05_t_19_deterministic_repeated_verification_100_runs() {
 }
 
 #[test]
-fn test_05_t_20_deterministic_gate_result_hash() {
+fn test_05_t_20_deterministic_analysis_hash() {
     let sim = make_valid_base_sim();
     let req = make_base_request(VerificationProfile::strict());
 
-    let res1 = MechanicalVerifier::verify(&req, &sim);
-    let res2 = MechanicalVerifier::verify(&req, &sim);
+    let res1 = CombatVerifier::verify(&req, &sim);
+    let res2 = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(res1.gate_result_hash, res2.gate_result_hash);
-    assert_eq!(res1.gate_result_hash.len(), 64);
+    assert_eq!(res1.analysis_hash, res2.analysis_hash);
+    assert_eq!(res1.analysis_hash.len(), 64);
 }
 
 #[test]
@@ -518,9 +518,9 @@ fn test_05_t_21_replay_mismatch_detected_by_integrity() {
     sim.final_state_hash = "short_hash".to_string();
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Fail);
+    assert_eq!(result.status, AnalysisStatus::FindingsDetected);
     assert!(result
         .violations
         .contains(&ViolationCode::InvalidSimulation));
@@ -541,8 +541,8 @@ fn test_05_t_22_revision_mismatch_produces_stale() {
         verifier_version: req.verifier_version.clone(),
     };
 
-    let result = MechanicalVerifier::verify_with_baseline(&req, &sim, &baseline);
-    assert_eq!(result.verdict, GateVerdict::Stale);
+    let result = CombatVerifier::verify_with_baseline(&req, &sim, &baseline);
+    assert_eq!(result.status, AnalysisStatus::Stale);
 }
 
 #[test]
@@ -560,8 +560,8 @@ fn test_05_t_23_profile_mismatch_produces_stale() {
         verifier_version: req.verifier_version.clone(),
     };
 
-    let result = MechanicalVerifier::verify_with_baseline(&req, &sim, &baseline);
-    assert_eq!(result.verdict, GateVerdict::Stale);
+    let result = CombatVerifier::verify_with_baseline(&req, &sim, &baseline);
+    assert_eq!(result.status, AnalysisStatus::Stale);
 }
 
 #[test]
@@ -579,8 +579,8 @@ fn test_05_t_24_verifier_version_mismatch_produces_stale() {
         verifier_version: "0.0.1".to_string(), // Mismatch!
     };
 
-    let result = MechanicalVerifier::verify_with_baseline(&req, &sim, &baseline);
-    assert_eq!(result.verdict, GateVerdict::Stale);
+    let result = CombatVerifier::verify_with_baseline(&req, &sim, &baseline);
+    assert_eq!(result.status, AnalysisStatus::Stale);
 }
 
 #[test]
@@ -591,9 +591,9 @@ fn test_05_t_25_invalid_simulation_error_fails_closed() {
     };
 
     let req = make_base_request(VerificationProfile::strict());
-    let result = MechanicalVerifier::verify(&req, &sim);
+    let result = CombatVerifier::verify(&req, &sim);
 
-    assert_eq!(result.verdict, GateVerdict::Error);
+    assert_eq!(result.status, AnalysisStatus::Error);
     assert!(result
         .violations
         .contains(&ViolationCode::InvalidSimulation));

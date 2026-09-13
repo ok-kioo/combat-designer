@@ -11,7 +11,7 @@ A stack de observabilidade atende aos responsáveis pela operação, desenvolvim
 - **Logs**: Structured JSON logging com redaction automática e recursiva de credenciais e tokens.
 - **Traces**: W3C Trace Context propagation nativo via OpenTelemetry SDK/API (`traceparent`, `tracestate`).
 - **Health**: Endpoints operacionais sanitizados (`/health/live`, `/health/ready`, `/health/dependencies`).
-- **Dashboards**: Grafana provisioning e definições declarativas para API, Gateway, Simulator, Mechanical Gate, ChangeSets e Infraestrutura.
+- **Dashboards**: Grafana provisioning e definições declarativas para API, Gateway, Simulator, Combat Analysis e Infraestrutura.
 
 ---
 
@@ -27,8 +27,8 @@ A plataforma estabelece uma fronteira não negociável entre Product e Operation
 
 1. **Authority**:
    - `Observability observes; it NEVER authorizes, verifies, approves, applies, or mutates canonical state.`
-   - Telemetria nunca converte `FAIL`/`BLOCKED`/`STALE`/`BUDGET_EXCEEDED` para `PASS`.
-   - Telemetria nunca aprova nem aplica um ChangeSet.
+   - Telemetria nunca sintetiza ou altera diagnósticos, findings, evidências ou resultados de simulação.
+   - Telemetria nunca autoriza mutações no estado canônico.
 2. **Domain Purity**:
    - Crates Rust (`combat-domain`, `combat-simulation`, `combat-verification`) permanecem 100% puros, determinísticos, baseados em inteiros e livres de frameworks de telemetria.
 3. **Telemetry Failure Isolation**:

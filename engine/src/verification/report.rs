@@ -1,4 +1,4 @@
-//! Verification verdicts, check statuses, and GateResult data models.
+//! Analysis reports, check statuses, and diagnostic models.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,20 +19,20 @@ pub enum CheckStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum GateVerdict {
-    Pass,
-    Fail,
+pub enum AnalysisStatus {
+    Clear,
+    FindingsDetected,
     Blocked,
     Stale,
     BudgetExceeded,
     Error,
 }
 
-impl GateVerdict {
+impl AnalysisStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Pass => "PASS",
-            Self::Fail => "FAIL",
+            Self::Clear => "CLEAR",
+            Self::FindingsDetected => "FINDINGS_DETECTED",
             Self::Blocked => "BLOCKED",
             Self::Stale => "STALE",
             Self::BudgetExceeded => "BUDGET_EXCEEDED",
@@ -55,8 +55,8 @@ pub struct CheckResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GateResult {
-    pub gate_run_id: String,
+pub struct AnalysisReport {
+    pub analysis_run_id: String,
     pub workspace_id: String,
     pub project_revision: String,
     pub canonical_snapshot_hash: String,
@@ -65,11 +65,11 @@ pub struct GateResult {
     pub event_log_hash: String,
     pub verification_profile: String,
     pub rule_set_version: String,
-    pub verifier_version: String,
-    pub verdict: GateVerdict,
+    pub analyzer_version: String,
+    pub status: AnalysisStatus,
     pub checks: Vec<CheckResult>,
     pub violations: Vec<ViolationCode>,
     pub evidence: Vec<Evidence>,
     pub budgets: VerificationBudgetResult,
-    pub gate_result_hash: String,
+    pub analysis_hash: String,
 }

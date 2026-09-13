@@ -1,3 +1,5 @@
+import { renameWorkspace } from '../../modules/workspace/application/rename-workspace.js';
+import { createCharacter } from '../../modules/combat/service/create-character.js';
 import http from "node:http";
 import {
   API_METRICS,
@@ -16,7 +18,7 @@ import type {
   CombatQueryPort,
   AttackSummary,
   SimulationPort,
-  MechanicalGatePort,
+  CombatAnalysisPort,
 } from "../../modules/combat/domain/repository/index.js";
 import type { ChangeSetRepositoryPort } from "../../modules/changeset/domain/repository/index.js";
 import type { ChangeSetProposal } from "../../modules/changeset/domain/entity/index.js";
@@ -35,6 +37,17 @@ import {
   type WorkspaceRepositoryPort,
   type WorkspaceAuthorizationPort,
   type Workspace,
+  SqliteChatRepository,
+  type ChatRepositoryPort,
+  type CharacterRepositoryPort,
+  InMemoryCharacterRepository,
+  type ComboRepositoryPort,
+  InMemoryComboRepository,
+  type AnalysisRepositoryPort,
+  InMemoryAnalysisRepository,
+  GetWorkspaceOverviewUseCase,
+  SaveComboUseCase,
+  RequestAnalysisUseCase,
 } from "../../index.js";
 
 export interface WorkspaceState {
@@ -47,9 +60,9 @@ export interface WorkspaceState {
   quarantined_count: number;
   conflicts_count: number;
   history: Array<{
-    type: "simulation" | "gate_run";
+    type: "simulation" | "analysis";
     id: string;
-    verdict?: string;
+    status?: string;
     created_at: string;
   }>;
 }
@@ -64,12 +77,16 @@ export interface ApiServerConfig {
   strictOperationalIsolation?: boolean;
   queryPort?: CombatQueryPort;
   simulationPort?: SimulationPort;
-  gatePort?: MechanicalGatePort;
+  analysisPort?: CombatAnalysisPort;
   changesetRepo?: ChangeSetRepositoryPort;
   llmProvider?: LlmProvider;
   authService?: AuthService;
   workspaceRepo?: WorkspaceRepositoryPort;
   workspaceAuthorizationPort?: WorkspaceAuthorizationPort;
+  chatRepo?: ChatRepositoryPort;
+  characterRepo?: CharacterRepositoryPort;
+  comboRepo?: ComboRepositoryPort;
+  analysisRepo?: AnalysisRepositoryPort;
   allowLegacyHeader?: boolean;
 }
 
@@ -84,7 +101,7 @@ export class ApiServer {
   public readonly strictOperationalIsolation: boolean;
   public readonly queryPort?: CombatQueryPort;
   public readonly simulationPort?: SimulationPort;
-  public readonly gatePort?: MechanicalGatePort;
+  public readonly analysisPort?: CombatAnalysisPort;
   public readonly changesetRepo?: ChangeSetRepositoryPort;
   public readonly chatOrchestrator?: ChatOrchestrator;
   public readonly authService: AuthService;
@@ -92,6 +109,13 @@ export class ApiServer {
   public readonly authController: AuthController;
   public readonly workspaceRepo: WorkspaceRepositoryPort;
   public readonly workspaceAuthorizationPort: WorkspaceAuthorizationPort;
+  public readonly chatRepo: ChatRepositoryPort;
+  public readonly characterRepo: CharacterRepositoryPort;
+  public readonly comboRepo: ComboRepositoryPort;
+  public readonly analysisRepo: AnalysisRepositoryPort;
+  public readonly getOverviewUseCase: GetWorkspaceOverviewUseCase;
+  public readonly saveComboUseCase: SaveComboUseCase;
+  public readonly requestAnalysisUseCase: RequestAnalysisUseCase;
   public readonly allowLegacyHeader: boolean;
   private readonly workspaceStates = new Map<string, WorkspaceState>();
   private readonly changesetStore = new Map<string, Map<string, ChangeSetProposal>>();
@@ -106,13 +130,47 @@ export class ApiServer {
     this.strictOperationalIsolation = config.strictOperationalIsolation ?? false;
     this.queryPort = config.queryPort;
     this.simulationPort = config.simulationPort;
-    this.gatePort = config.gatePort;
+    this.analysisPort = config.analysisPort;
     this.changesetRepo = config.changesetRepo;
     this.allowLegacyHeader = config.allowLegacyHeader ?? true;
 
     this.workspaceRepo = config.workspaceRepo ?? new InMemoryWorkspaceRepository();
     this.workspaceAuthorizationPort =
       config.workspaceAuthorizationPort ?? new WorkspaceAuthorizationService(this.workspaceRepo);
+
+    this.chatRepo = config.chatRepo ?? new SqliteChatRepository(process.env.CHAT_DB_PATH || ":memory:");
+    this.characterRepo = config.characterRepo ?? new InMemoryCharacterRepository();
+    this.comboRepo = config.comboRepo ?? new InMemoryComboRepository();
+    this.analysisRepo = config.analysisRepo ?? new InMemoryAnalysisRepository();
+
+    this.getOverviewUseCase = new GetWorkspaceOverviewUseCase({
+      workspaceRepo: this.workspaceRepo,
+      characterRepo: this.characterRepo,
+      comboRepo: this.comboRepo,
+      analysisRepo: this.analysisRepo,
+      getAttacks: async (wsId) => {
+        const state = this.getWorkspaceState(wsId);
+        return state.latest_envelope?.canonical_snapshot?.attacks ?? [];
+      },
+    });
+
+    this.saveComboUseCase = new SaveComboUseCase(
+      this.comboRepo,
+      this.characterRepo,
+      async (wsId) => {
+        const state = this.getWorkspaceState(wsId);
+        return state.latest_envelope?.canonical_snapshot?.attacks ?? [];
+      }
+    );
+
+    this.requestAnalysisUseCase = new RequestAnalysisUseCase(
+      this.analysisRepo,
+      async (wsId) => {
+        const state = this.getWorkspaceState(wsId);
+        return state.latest_envelope?.canonical_snapshot?.attacks ?? [];
+      },
+      this.simulationPort
+    );
 
     if (config.authService) {
       this.authService = config.authService;
@@ -126,10 +184,82 @@ export class ApiServer {
 
     // Initialize ChatOrchestrator if LLM provider is available
     if (config.llmProvider) {
+      const fallbackQueryPort: CombatQueryPort = this.queryPort || {
+        searchAttacks: async (params) => {
+          const state = this.getWorkspaceState(params.workspace_id);
+          const rawAttacks = state.latest_envelope?.canonical_snapshot?.attacks ?? [];
+          return rawAttacks
+            .filter((a) => {
+              const attackName = typeof a.name === "string" ? a.name : a.name?.name ?? "";
+              if (params.query && !attackName.toLowerCase().includes(params.query.toLowerCase())) return false;
+              if (params.tag && (!a.tags || !a.tags.includes(params.tag))) return false;
+              if (params.min_cancel_window !== undefined && a.cancels) {
+                const hasWin = a.cancels.some((c) => (c.window.end - c.window.start) >= params.min_cancel_window!);
+                if (!hasWin) return false;
+              }
+              return true;
+            })
+            .map((a) => ({
+              attack_id: a.id,
+              character_id: a.character_id ?? null,
+              name: typeof a.name === "string" ? a.name : a.name?.name ?? a.id,
+              startup_frames: a.startup_frames,
+              active_frames: a.active_frames,
+              recovery_frames: a.recovery_frames,
+              damage: a.damage,
+              cancel_window: a.cancels?.[0]?.window
+                ? { start_frame: a.cancels[0].window.start, end_frame: a.cancels[0].window.end }
+                : undefined,
+              tags: a.tags,
+              untrusted_text: true,
+            }));
+        },
+        getAttack: async (workspaceId, attackId) => {
+          const state = this.getWorkspaceState(workspaceId);
+          const rawAttacks = state.latest_envelope?.canonical_snapshot?.attacks ?? [];
+          const a = rawAttacks.find((x) => x.id === attackId);
+          if (!a) return null;
+          return {
+            attack_id: a.id,
+              character_id: a.character_id ?? null,
+            name: typeof a.name === "string" ? a.name : a.name?.name ?? a.id,
+            startup_frames: a.startup_frames,
+            active_frames: a.active_frames,
+            recovery_frames: a.recovery_frames,
+            damage: a.damage,
+            cancel_window: a.cancels?.[0]?.window
+              ? { start_frame: a.cancels[0].window.start, end_frame: a.cancels[0].window.end }
+              : undefined,
+            tags: a.tags,
+            untrusted_text: true,
+          };
+        },
+        getImpactAnalysis: async (_workspaceId, attackId) => {
+          return {
+            attack_id: attackId,
+            dependent_combos_count: 0,
+            archetypes_affected: [],
+            cancel_transitions_count: 0,
+          };
+        },
+        getProvenance: async (_workspaceId, assetId) => {
+          return {
+            asset_id: assetId,
+            source_file: "in-memory-snapshot",
+            importer: "system",
+            imported_at: new Date().toISOString(),
+            untrusted_text: false,
+          };
+        },
+        getScenarios: async (_workspaceId) => {
+          return [];
+        },
+      };
+
       this.chatOrchestrator = new ChatOrchestrator(config.llmProvider, {
-        queryPort: this.queryPort,
+        queryPort: fallbackQueryPort,
         simulationPort: this.simulationPort,
-        gatePort: this.gatePort,
+        analysisPort: this.analysisPort,
         saveChangeset: (proposal) => this.saveChangeset(proposal),
         getWorkspaceRevision: (wsId) => this.getWorkspaceState(wsId).latest_revision,
       });
@@ -153,12 +283,12 @@ export class ApiServer {
     return initial;
   }
 
-  public recordGateRun(workspaceId: string, id: string, verdict: string): void {
+  public recordAnalysisRun(workspaceId: string, id: string, status = "COMPLETED"): void {
     const state = this.getWorkspaceState(workspaceId);
     state.history.unshift({
-      type: "gate_run",
+      type: "analysis",
       id,
-      verdict,
+      status,
       created_at: new Date().toISOString(),
     });
   }
@@ -197,6 +327,186 @@ export class ApiServer {
   public getChangesetsForWorkspace(workspaceId: string): ChangeSetProposal[] {
     const store = this.getChangesetStore(workspaceId);
     return Array.from(store.values());
+  }
+
+  public async seedDemoAttacks(workspaceId: string): Promise<void> {
+    const state = this.getWorkspaceState(workspaceId);
+    const snapshotHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    state.has_snapshot = true;
+    state.latest_revision = "rev-1.0.0";
+    state.latest_snapshot_hash = snapshotHash;
+
+    const sampleEnvelope: CanonicalSnapshotEnvelope = {
+      workspace_id: workspaceId,
+      project_id: "combat-core",
+      revision: "rev-1.0.0",
+      snapshot_id: "snap-01",
+      snapshot_hash: snapshotHash,
+      parser_version: "1.0",
+      schema_version: "1.0",
+      created_at: new Date().toISOString(),
+      quarantined: [],
+      conflicts: [],
+      canonical_snapshot: {
+        workspace_id: workspaceId,
+        project_id: "combat-core",
+        project_revision: "rev-1.0.0",
+        snapshot_hash: snapshotHash,
+        attacks: [
+          {
+            id: "atk_light_punch",
+            name: { name: "Light Punch", raw_label: "Light Punch", untrusted_text: true },
+            startup_frames: 4,
+            active_frames: 3,
+            recovery_frames: 8,
+            damage: 25,
+            hitstun_frames: 12,
+            hitstop_frames: 4,
+            blockstun_frames: 8,
+            chip_damage: 0,
+            guard_break_value: 0,
+            invuln_windows: [],
+            armor_windows: [],
+            resource_costs: [],
+            hitboxes: [],
+            cancels: [
+              {
+                source_attack: "atk_light_punch",
+                target_action: "atk_heavy_kick",
+                window: { start: 7, end: 11 },
+                condition: "on_hit",
+              },
+            ],
+            tags: ["light", "punch", "normal", "combo_starter"],
+            character_id: "char_default",
+            assignment_status: "ASSIGNED",
+            provenance: {
+              status: "canonical",
+              project_revision: "rev-1.0.0",
+              engine: "unity",
+              parser_version: "1.0",
+              asset_id: "punch_asset",
+              source_path: "Assets/Punch.asset",
+              confidence_permille: 1000,
+            },
+          },
+          {
+            id: "atk_heavy_kick",
+            name: { name: "Heavy Kick", raw_label: "Heavy Kick", untrusted_text: true },
+            startup_frames: 10,
+            active_frames: 4,
+            recovery_frames: 16,
+            damage: 80,
+            hitstun_frames: 22,
+            hitstop_frames: 8,
+            blockstun_frames: 14,
+            chip_damage: 0,
+            guard_break_value: 15,
+            invuln_windows: [],
+            armor_windows: [],
+            resource_costs: [],
+            hitboxes: [],
+            cancels: [],
+            tags: ["heavy", "kick", "normal", "knockdown"],
+            character_id: "char_default",
+            assignment_status: "ASSIGNED",
+            provenance: {
+              status: "canonical",
+              project_revision: "rev-1.0.0",
+              engine: "unity",
+              parser_version: "1.0",
+              asset_id: "kick_asset",
+              source_path: "Assets/Kick.asset",
+              confidence_permille: 1000,
+            },
+          },
+          {
+            id: "atk_hadoken",
+            name: { name: "Ki Fireball", raw_label: "Ki Fireball", untrusted_text: true },
+            startup_frames: 13,
+            active_frames: 6,
+            recovery_frames: 18,
+            damage: 60,
+            hitstun_frames: 18,
+            hitstop_frames: 6,
+            blockstun_frames: 12,
+            chip_damage: 10,
+            guard_break_value: 0,
+            invuln_windows: [],
+            armor_windows: [],
+            resource_costs: [{ resource_type: "meter", amount: 100, cost_frame: 1 }],
+            hitboxes: [],
+            cancels: [],
+            tags: ["special", "projectile", "zoning"],
+            character_id: "char_default",
+            assignment_status: "ASSIGNED",
+            provenance: {
+              status: "canonical",
+              project_revision: "rev-1.0.0",
+              engine: "unity",
+              parser_version: "1.0",
+              asset_id: "fireball_asset",
+              source_path: "Assets/Fireball.asset",
+              confidence_permille: 1000,
+            },
+          },
+          {
+            id: "atk_shoryuken",
+            name: { name: "Dragon Uppercut", raw_label: "Dragon Uppercut", untrusted_text: true },
+            startup_frames: 6,
+            active_frames: 6,
+            recovery_frames: 26,
+            damage: 120,
+            hitstun_frames: 35,
+            hitstop_frames: 10,
+            blockstun_frames: 18,
+            chip_damage: 15,
+            guard_break_value: 20,
+            invuln_windows: [{ start: 1, end: 6 }],
+            armor_windows: [],
+            resource_costs: [],
+            hitboxes: [],
+            cancels: [],
+            tags: ["special", "anti-air", "reversal", "invulnerable"],
+            character_id: "char_default",
+            assignment_status: "ASSIGNED",
+            provenance: {
+              status: "canonical",
+              project_revision: "rev-1.0.0",
+              engine: "unity",
+              parser_version: "1.0",
+              asset_id: "uppercut_asset",
+              source_path: "Assets/Uppercut.asset",
+              confidence_permille: 1000,
+            },
+          },
+        ],
+      },
+    };
+
+    state.latest_envelope = sampleEnvelope;
+
+    const sampleChangeset: ChangeSetProposal = {
+      changeset_id: `cs_demo_${workspaceId.replace(/[^a-zA-Z0-9]/g, "_")}`,
+      workspace_id: workspaceId,
+      base_revision: "rev-1.0.0",
+      target_revision: "rev-1.0.1",
+      proposed_by: "combat_director_llm",
+      status: "proposed",
+      mutations: [
+        {
+          type: "attack_damage",
+          attack_id: "atk_light_punch",
+          current_damage: 25,
+          proposed_damage: 32,
+          reason: "Increase light punch reward on counter-hit",
+        },
+      ],
+      created_at: new Date().toISOString(),
+    };
+    this.saveChangeset(sampleChangeset);
+    await this.characterRepo.save({ id: "char_default", workspace_id: workspaceId, name: "Demo Fighter", display_name: "Demo Fighter", metadata: {}, provenance: { imported_at: new Date().toISOString(), importer: "demo" } });
   }
 
   public async checkAuthorization(
@@ -359,6 +669,26 @@ export class ApiServer {
       "Access-Control-Allow-Headers": "Content-Type, Authorization, x-authorized-workspaces, x-request-id, x-correlation-id, traceparent, x-internal-secret, x-operational-secret, x-operational-boundary",
       "Access-Control-Allow-Credentials": "true",
     };
+
+    if (typeof res.setHeader === "function") {
+      for (const [headerName, headerValue] of Object.entries(corsHeaders)) {
+        res.setHeader(headerName, headerValue);
+      }
+    }
+
+    if (typeof res.writeHead === "function") {
+      const origWriteHead = res.writeHead.bind(res);
+      res.writeHead = (statusCode: number, ...args: any[]): any => {
+        if (args.length > 0 && typeof args[0] === "object" && args[0] !== null) {
+          args[0] = { ...corsHeaders, ...args[0] };
+        } else if (args.length > 1 && typeof args[1] === "object" && args[1] !== null) {
+          args[1] = { ...corsHeaders, ...args[1] };
+        } else {
+          args.push(corsHeaders);
+        }
+        return (origWriteHead as any)(statusCode, ...args);
+      };
+    }
 
     // Preflight OPTIONS requests
     if (method === "OPTIONS") {
@@ -549,6 +879,12 @@ export class ApiServer {
               updated_at: now,
             };
             await this.workspaceRepo.save(workspace);
+
+            // Optional demo data seeding when requested (e.g. initial project for web workbench)
+            if (body.seed_demo_data === true || body.seed_demo === true) {
+              await this.seedDemoAttacks(workspaceId);
+            }
+
             return finish(201, JSON.stringify(workspace));
           } catch (err: any) {
             return finish(400, JSON.stringify({ error: "BAD_REQUEST", message: err.message }));
@@ -575,6 +911,279 @@ export class ApiServer {
         }
 
         return finish(200, JSON.stringify(workspace));
+      }
+
+      if (method === "PATCH" && singleWorkspaceMatch) {
+        const auth = await this.authMiddleware.authenticate(req);
+        if (!auth.authenticated) return finish(auth.status, JSON.stringify({ error: auth.code }));
+        try {
+          const body = JSON.parse(await this.readRequestBody(req));
+          const result = await renameWorkspace(this.workspaceRepo, auth.context.userId, decodeURIComponent(singleWorkspaceMatch[1]), body.name);
+          return finish(result.status, JSON.stringify('workspace' in result ? result.workspace : { error: result.error }));
+        } catch { return finish(400, JSON.stringify({ error: "BAD_REQUEST" })); }
+      }
+
+      if (method === "DELETE" && singleWorkspaceMatch) {
+        const workspaceId = decodeURIComponent(singleWorkspaceMatch[1]);
+        const auth = await this.authMiddleware.authenticate(req);
+        if (!auth.authenticated) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+
+        const workspace = await this.workspaceRepo.findById(workspaceId);
+        if (!workspace) {
+          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Workspace '${workspaceId}' not found` }));
+        }
+
+        if (workspace.owner_user_id !== auth.context.userId) {
+          return finish(403, JSON.stringify({ error: "FORBIDDEN", message: `User '${auth.context.userId}' is not the owner of workspace '${workspaceId}'` }));
+        }
+
+        if (this.workspaceRepo.delete) {
+          await this.workspaceRepo.delete(workspaceId);
+        }
+        this.workspaceStates.delete(workspaceId);
+        return finish(204, "");
+      }
+
+      // 4e. Archive Workspace: PUT /api/workspaces/:workspace_id/archive (Spec 14)
+      const archiveWorkspaceMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/archive\/?$/);
+      if (method === "PUT" && archiveWorkspaceMatch) {
+        const workspaceId = decodeURIComponent(archiveWorkspaceMatch[1]);
+        const auth = await this.authMiddleware.authenticate(req);
+        if (!auth.authenticated) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+
+        const workspace = await this.workspaceRepo.findById(workspaceId);
+        if (!workspace) {
+          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Workspace '${workspaceId}' not found` }));
+        }
+
+        if (workspace.owner_user_id !== auth.context.userId) {
+          return finish(403, JSON.stringify({ error: "FORBIDDEN", message: `User '${auth.context.userId}' is not the owner of workspace '${workspaceId}'` }));
+        }
+
+        workspace.status = "archived";
+        workspace.updated_at = new Date().toISOString();
+        await this.workspaceRepo.save(workspace);
+        return finish(200, JSON.stringify(workspace));
+      }
+
+      // 4f. Workspace Overview & Real KPIs: GET /api/workspaces/:workspace_id/overview (Spec 14)
+      const overviewMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/overview\/?$/);
+      if (method === "GET" && overviewMatch) {
+        const workspaceId = decodeURIComponent(overviewMatch[1]);
+        const auth = await this.checkAuthorization(req, workspaceId);
+        if (!auth.authorized) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+
+        try {
+          const result = await this.getOverviewUseCase.execute({ workspace_id: workspaceId });
+          return finish(200, JSON.stringify(result));
+        } catch (err: any) {
+          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: err.message }));
+        }
+      }
+
+      // 4g. Characters list & details (Spec 14)
+      const charactersMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/characters\/?$/);
+      if (method === "GET" && charactersMatch) {
+        const workspaceId = decodeURIComponent(charactersMatch[1]);
+        const auth = await this.checkAuthorization(req, workspaceId);
+        if (!auth.authorized) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+        const characters = await this.characterRepo.findByWorkspace(workspaceId);
+        return finish(200, JSON.stringify({ workspace_id: workspaceId, count: characters.length, characters }));
+      }
+
+      if (method === "POST" && charactersMatch) {
+        const workspaceId = decodeURIComponent(charactersMatch[1]);
+        const auth = await this.authMiddleware.authenticate(req);
+        if (!auth.authenticated) return finish(auth.status, JSON.stringify({ error: auth.code }));
+        const workspace = await this.workspaceRepo.findById(workspaceId);
+        if (!workspace || workspace.owner_user_id !== auth.context.userId) return finish(404, JSON.stringify({ error: "WORKSPACE_UNAVAILABLE" }));
+        if (workspace.status === "archived") return finish(409, JSON.stringify({ error: "WORKSPACE_ARCHIVED" }));
+        try {
+          const body = JSON.parse(await this.readRequestBody(req));
+          const character = await createCharacter(this.characterRepo, workspaceId, body, `char-${crypto.randomUUID()}`, new Date().toISOString());
+          return finish(201, JSON.stringify(character));
+        } catch { return finish(400, JSON.stringify({ error: "INVALID_CHARACTER" })); }
+      }
+
+      const singleCharMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/characters\/([^/]+)\/?$/);
+      if (method === "GET" && singleCharMatch) {
+        const workspaceId = decodeURIComponent(singleCharMatch[1]);
+        const characterId = decodeURIComponent(singleCharMatch[2]);
+        const auth = await this.checkAuthorization(req, workspaceId);
+        if (!auth.authorized) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+        const character = await this.characterRepo.findById(workspaceId, characterId);
+        if (!character) {
+          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Character '${characterId}' not found in workspace` }));
+        }
+        return finish(200, JSON.stringify(character));
+      }
+
+      // 4h. Combos list & create (Spec 14)
+      const combosMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/combos\/?$/);
+      if (combosMatch) {
+        const workspaceId = decodeURIComponent(combosMatch[1]);
+        const auth = await this.checkAuthorization(req, workspaceId);
+        if (!auth.authorized) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+
+        if (method === "GET") {
+          const searchParams = new URL(url, "http://localhost").searchParams;
+          const charId = searchParams.get("character_id") || undefined;
+          const source = searchParams.get("source") || undefined;
+          const combos = await this.comboRepo.findByWorkspace(workspaceId, { character_id: charId, source });
+          return finish(200, JSON.stringify({ workspace_id: workspaceId, count: combos.length, combos }));
+        }
+
+        if (method === "POST") {
+          try {
+            const bodyStr = await this.readRequestBody(req);
+            const body = JSON.parse(bodyStr || "{}");
+            const result = await this.saveComboUseCase.execute({
+              workspace_id: workspaceId,
+              character_id: body.character_id,
+              name: body.name,
+              source: body.source,
+              steps: body.steps,
+              notes: body.notes,
+              evidence: body.evidence,
+            });
+
+            if (!result.success) {
+              return finish(400, JSON.stringify({ error: result.error, message: result.message }));
+            }
+            return finish(201, JSON.stringify(result.combo));
+          } catch (err: any) {
+            return finish(400, JSON.stringify({ error: "BAD_REQUEST", message: err.message }));
+          }
+        }
+      }
+
+      const singleComboMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/combos\/([^/]+)\/?$/);
+      if (singleComboMatch) {
+        const workspaceId = decodeURIComponent(singleComboMatch[1]);
+        const comboId = decodeURIComponent(singleComboMatch[2]);
+        const auth = await this.checkAuthorization(req, workspaceId);
+        if (!auth.authorized) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+
+        if (method === "GET") {
+          const combo = await this.comboRepo.findById(workspaceId, comboId);
+          if (!combo) {
+            return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Combo '${comboId}' not found` }));
+          }
+          const evaluation = await this.comboRepo.getEvaluation(comboId);
+          return finish(200, JSON.stringify({ combo, evaluation }));
+        }
+
+        if (method === "DELETE") {
+          const deleted = await this.comboRepo.delete(workspaceId, comboId);
+          if (!deleted) {
+            return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Combo '${comboId}' not found` }));
+          }
+          return finish(204, "");
+        }
+      }
+
+      // 4i. Conversations list & create (Spec 14)
+      const conversationsMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/conversations\/?$/);
+      if (conversationsMatch) {
+        const workspaceId = decodeURIComponent(conversationsMatch[1]);
+        const auth = await this.checkAuthorization(req, workspaceId);
+        if (!auth.authorized) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+        const userId = (auth as any).userId || (req.headers["x-user-id"] as string) || "anonymous";
+
+        if (method === "GET") {
+          const conversations = await this.chatRepo.findConversations(userId, workspaceId);
+          return finish(200, JSON.stringify({ workspace_id: workspaceId, count: conversations.length, conversations }));
+        }
+
+        if (method === "POST") {
+          try {
+            const bodyStr = await this.readRequestBody(req);
+            const body = JSON.parse(bodyStr || "{}");
+            const cid = `conv-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+            const now = new Date().toISOString();
+            const conv = await this.chatRepo.createConversation({
+              id: cid,
+              user_id: userId,
+              workspace_id: workspaceId,
+              title: body.title || "Nova Conversa",
+              created_at: now,
+              updated_at: now,
+            });
+            return finish(201, JSON.stringify(conv));
+          } catch (err: any) {
+            return finish(400, JSON.stringify({ error: "BAD_REQUEST", message: err.message }));
+          }
+        }
+      }
+
+      // 4j. Conversation Messages list (Spec 14)
+      const messagesMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/conversations\/([^/]+)\/messages\/?$/);
+      if (method === "GET" && messagesMatch) {
+        const workspaceId = decodeURIComponent(messagesMatch[1]);
+        const conversationId = decodeURIComponent(messagesMatch[2]);
+        const auth = await this.checkAuthorization(req, workspaceId);
+        if (!auth.authorized) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+        const userId = (auth as any).userId || (req.headers["x-user-id"] as string) || "anonymous";
+        const conv = await this.chatRepo.getConversation(conversationId, userId, workspaceId);
+        if (!conv) {
+          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Conversation '${conversationId}' not found or access denied` }));
+        }
+
+        const messages = await this.chatRepo.getMessages(conversationId, userId, workspaceId);
+        return finish(200, JSON.stringify({ conversation_id: conversationId, count: messages.length, messages }));
+      }
+
+      // 4k. Analyses list & request (Spec 14)
+      const analysesMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/analyses\/?$/);
+      if (analysesMatch) {
+        const workspaceId = decodeURIComponent(analysesMatch[1]);
+        const auth = await this.checkAuthorization(req, workspaceId);
+        if (!auth.authorized) {
+          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
+        }
+
+        if (method === "GET") {
+          const searchParams = new URL(url, "http://localhost").searchParams;
+          const charId = searchParams.get("character_id") || undefined;
+          const analyses = await this.analysisRepo.findByWorkspace(workspaceId, { character_id: charId });
+          return finish(200, JSON.stringify({ workspace_id: workspaceId, count: analyses.length, analyses }));
+        }
+
+        if (method === "POST") {
+          try {
+            const bodyStr = await this.readRequestBody(req);
+            const body = JSON.parse(bodyStr || "{}");
+            const analysis = await this.requestAnalysisUseCase.execute({
+              workspace_id: workspaceId,
+              character_id: body.character_id,
+              subject: body.subject,
+              target_attack_id: body.target_attack_id,
+              sequence: body.sequence,
+            });
+            this.recordAnalysisRun(workspaceId, analysis.id, "COMPLETED");
+            return finish(201, JSON.stringify(analysis));
+          } catch (err: any) {
+            return finish(400, JSON.stringify({ error: "BAD_REQUEST", message: err.message }));
+          }
+        }
       }
 
       // 5. Ingestion Delivery: POST /api/workspaces/:workspace_id/bundles
@@ -796,6 +1405,7 @@ export class ApiServer {
             })
             .map((a) => ({
               attack_id: a.id,
+              character_id: a.character_id ?? null,
               name: typeof a.name === "string" ? a.name : a.name?.name ?? a.id,
               startup_frames: a.startup_frames,
               active_frames: a.active_frames,
@@ -883,60 +1493,32 @@ export class ApiServer {
         return finish(200, JSON.stringify({ workspace_id: workspaceId, simulation: output }));
       }
 
-      // 10. Mechanical Gate Verification: POST /api/workspaces/:workspace_id/verifications
-      const verifyMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/verifications\/?$/);
-      if (method === "POST" && verifyMatch) {
-        const workspaceId = decodeURIComponent(verifyMatch[1]);
-        const auth = await this.checkAuthorization(req, workspaceId);
-        if (!auth.authorized) {
-          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
-        }
-        const bodyText = await this.readRequestBody(req);
-        const { verification_request, simulation_output } = JSON.parse(bodyText || "{}");
 
-        let gateResult: any;
-        if (this.gatePort) {
-          gateResult = await this.gatePort.verify(verification_request, simulation_output);
-        } else {
-          const verdict = verification_request?.should_fail
-            ? "FAIL"
-            : (verification_request?.budget_exceeded ? "BUDGET_EXCEEDED" : "PASS");
-          gateResult = {
-            gate_run_id: `gate_${Date.now()}`,
-            verdict,
-            gate_result_hash: `gate_hash_${Date.now()}`,
-            violations: verdict === "FAIL" ? [{ rule_id: "MAX_SUSTAINED_DPS", severity: "FAIL", message: "DPS exceeded limit" }] : [],
-            checks: [{ rule_id: "NO_INFINITE_LOOP", status: verdict }],
-            summary: { total_checks: 1, passed: verdict === "PASS" ? 1 : 0, failed: verdict === "FAIL" ? 1 : 0, evidence_count: 0 },
-          };
-        }
-        this.recordGateRun(workspaceId, gateResult.gate_run_id, gateResult.verdict);
-        return finish(200, JSON.stringify({ workspace_id: workspaceId, gate_result: gateResult }));
-      }
-
-      // 11. List ChangeSets: GET /api/workspaces/:workspace_id/changesets
-      const changesetsMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/changesets\/?$/);
-      if (method === "GET" && changesetsMatch) {
-        const workspaceId = decodeURIComponent(changesetsMatch[1]);
+      // 11. List Proposals: GET /api/workspaces/:workspace_id/proposals
+      // (CODE_LEGACY_PRODUCT_DIRECTION: Matches /changesets for backward compatibility)
+      const proposalsMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/(?:proposals|changesets)\/?$/);
+      if (method === "GET" && proposalsMatch) {
+        const workspaceId = decodeURIComponent(proposalsMatch[1]);
         const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
         const list = this.getChangesetsForWorkspace(workspaceId);
-        return finish(200, JSON.stringify({ workspace_id: workspaceId, count: list.length, changesets: list }));
+        return finish(200, JSON.stringify({ workspace_id: workspaceId, count: list.length, proposals: list, changesets: list }));
       }
 
-      // 12. Propose ChangeSet: POST /api/workspaces/:workspace_id/changesets
-      const createChangesetMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/changesets\/?$/);
-      if (method === "POST" && createChangesetMatch) {
-        const workspaceId = decodeURIComponent(createChangesetMatch[1]);
+      // 12. Create Proposal: POST /api/workspaces/:workspace_id/proposals
+      // (CODE_LEGACY_PRODUCT_DIRECTION: Matches /changesets for backward compatibility)
+      const createProposalMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/(?:proposals|changesets)\/?$/);
+      if (method === "POST" && createProposalMatch) {
+        const workspaceId = decodeURIComponent(createProposalMatch[1]);
         const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
         const bodyText = await this.readRequestBody(req);
         const payload = JSON.parse(bodyText || "{}");
-        const id = `cs_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const id = `prop_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
         const proposal: ChangeSetProposal = {
           changeset_id: id,
           workspace_id: workspaceId,
@@ -949,95 +1531,45 @@ export class ApiServer {
           idempotency_key: payload.idempotency_key,
         };
         this.saveChangeset(proposal);
-        return finish(201, JSON.stringify({ status: "PROPOSED", workspace_id: workspaceId, changeset: proposal }));
+        return finish(201, JSON.stringify({ status: "PROPOSED", workspace_id: workspaceId, proposal, changeset: proposal }));
       }
 
-      // 13. Get ChangeSet by ID: GET /api/workspaces/:workspace_id/changesets/:changeset_id
-      const singleChangesetMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/changesets\/([^/]+)\/?$/);
-      if (method === "GET" && singleChangesetMatch) {
-        const workspaceId = decodeURIComponent(singleChangesetMatch[1]);
-        const changesetId = decodeURIComponent(singleChangesetMatch[2]);
+      // 13. Get Proposal by ID: GET /api/workspaces/:workspace_id/proposals/:proposal_id
+      // (CODE_LEGACY_PRODUCT_DIRECTION: Matches /changesets for backward compatibility)
+      const singleProposalMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/(?:proposals|changesets)\/([^/]+)\/?$/);
+      if (method === "GET" && singleProposalMatch) {
+        const workspaceId = decodeURIComponent(singleProposalMatch[1]);
+        const proposalId = decodeURIComponent(singleProposalMatch[2]);
         const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
-        const found = this.getChangesetById(workspaceId, changesetId);
+        const found = this.getChangesetById(workspaceId, proposalId);
         if (!found) {
-          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `ChangeSet '${changesetId}' not found` }));
+          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Proposal '${proposalId}' not found` }));
         }
-        return finish(200, JSON.stringify({ workspace_id: workspaceId, changeset: found }));
+        return finish(200, JSON.stringify({ workspace_id: workspaceId, proposal: found, changeset: found }));
       }
 
-      // 14. Approve ChangeSet: POST /api/workspaces/:workspace_id/changesets/:changeset_id/approve
-      const approveMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/changesets\/([^/]+)\/approve\/?$/);
-      if (method === "POST" && approveMatch) {
-        const workspaceId = decodeURIComponent(approveMatch[1]);
-        const changesetId = decodeURIComponent(approveMatch[2]);
-        const auth = await this.checkAuthorization(req, workspaceId);
-        if (!auth.authorized) {
-          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
-        }
-        const bodyText = await this.readRequestBody(req);
-        const { approver_id } = JSON.parse(bodyText || "{}");
-        const found = this.getChangesetById(workspaceId, changesetId);
-        if (!found) {
-          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `ChangeSet '${changesetId}' not found` }));
-        }
-        found.status = "approved";
-        found.approved_by = approver_id || "human_lead";
-        found.approved_at = new Date().toISOString();
-        this.saveChangeset(found);
-        return finish(200, JSON.stringify({ status: "APPROVED", workspace_id: workspaceId, changeset: found }));
-      }
-
-      // 15. Apply ChangeSet: POST /api/workspaces/:workspace_id/changesets/:changeset_id/apply
-      const applyMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/changesets\/([^/]+)\/apply\/?$/);
-      if (method === "POST" && applyMatch) {
-        const workspaceId = decodeURIComponent(applyMatch[1]);
-        const changesetId = decodeURIComponent(applyMatch[2]);
-        const auth = await this.checkAuthorization(req, workspaceId);
-        if (!auth.authorized) {
-          return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
-        }
-        const bodyText = await this.readRequestBody(req);
-        const { gate_result } = JSON.parse(bodyText || "{}");
-        const found = this.getChangesetById(workspaceId, changesetId);
-        if (!found) {
-          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `ChangeSet '${changesetId}' not found` }));
-        }
-        if (found.status !== "approved") {
-          return finish(400, JSON.stringify({ error: "NOT_APPROVED", message: `ChangeSet '${changesetId}' must be approved before apply` }));
-        }
-        if (!gate_result || gate_result.verdict !== "PASS") {
-          return finish(400, JSON.stringify({ error: "GATE_VERDICT_REQUIRED", message: `Cannot apply changeset without non-stale GateResult PASS (received '${gate_result?.verdict}')` }));
-        }
-        found.status = "applied";
-        found.applied_at = new Date().toISOString();
-        this.saveChangeset(found);
-
-        const state = this.getWorkspaceState(workspaceId);
-        state.latest_revision = found.target_revision;
-        return finish(200, JSON.stringify({ status: "APPLIED", workspace_id: workspaceId, changeset: found }));
-      }
-
-      // 16. Withdraw ChangeSet: POST /api/workspaces/:workspace_id/changesets/:changeset_id/withdraw
-      const withdrawMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/changesets\/([^/]+)\/withdraw\/?$/);
+      // 16. Withdraw Proposal: POST /api/workspaces/:workspace_id/proposals/:proposal_id/withdraw
+      // (CODE_LEGACY_PRODUCT_DIRECTION: Matches /changesets for backward compatibility)
+      const withdrawMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/(?:proposals|changesets)\/([^/]+)\/withdraw\/?$/);
       if (method === "POST" && withdrawMatch) {
         const workspaceId = decodeURIComponent(withdrawMatch[1]);
-        const changesetId = decodeURIComponent(withdrawMatch[2]);
+        const proposalId = decodeURIComponent(withdrawMatch[2]);
         const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
         const bodyText = await this.readRequestBody(req);
         const { reason } = JSON.parse(bodyText || "{}");
-        const found = this.getChangesetById(workspaceId, changesetId);
+        const found = this.getChangesetById(workspaceId, proposalId);
         if (!found) {
-          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `ChangeSet '${changesetId}' not found` }));
+          return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Proposal '${proposalId}' not found` }));
         }
         found.status = "withdrawn";
         this.saveChangeset(found);
-        return finish(200, JSON.stringify({ status: "WITHDRAWN", workspace_id: workspaceId, changeset: found, reason }));
+        return finish(200, JSON.stringify({ status: "WITHDRAWN", workspace_id: workspaceId, proposal: found, changeset: found, reason }));
       }
 
       // 17. Director Chat & Structured LLM Input: POST /api/workspaces/:workspace_id/chat
@@ -1052,10 +1584,61 @@ export class ApiServer {
         const { prompt, context } = JSON.parse(bodyText || "{}");
         const state = this.getWorkspaceState(workspaceId);
 
+        const userId = (auth as any).userId || (req.headers["x-user-id"] as string) || "user_default";
+        let convId = (context?.conversation_id as string) || undefined;
+        if (this.chatRepo) {
+          try {
+            const now = new Date().toISOString();
+            if (convId) {
+              const existing = await this.chatRepo.getConversation(convId, userId, workspaceId);
+              if (!existing) {
+                const conv = await this.chatRepo.createConversation({
+                  id: convId,
+                  workspace_id: workspaceId,
+                  user_id: userId,
+                  title: "Combat Discussion",
+                  created_at: now,
+                  updated_at: now,
+                });
+                convId = conv.id;
+              }
+            } else {
+              const conversations = await this.chatRepo.findConversations(userId, workspaceId);
+              if (conversations.length > 0) {
+                convId = conversations[0].id;
+              } else {
+                const conv = await this.chatRepo.createConversation({
+                  id: `conv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                  workspace_id: workspaceId,
+                  user_id: userId,
+                  title: "General Discussion",
+                  created_at: now,
+                  updated_at: now,
+                });
+                convId = conv.id;
+              }
+            }
+            if (prompt && convId) {
+              await this.chatRepo.saveMessage({
+                id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                conversation_id: convId,
+                workspace_id: workspaceId,
+                role: "user",
+                content: prompt,
+                content_format: "markdown",
+                status: "completed",
+                created_at: new Date().toISOString(),
+              });
+            }
+          } catch (repoErr) {
+            console.warn("Could not persist user message:", repoErr);
+          }
+        }
+
         const contextEnvelope: ChatContextEnvelope = {
           workspace_id: workspaceId,
-          user_id: (auth as any).userId || (req.headers["x-user-id"] as string) || "user_default",
-          conversation_id: (context?.conversation_id as string) || `conv_${workspaceId}_default`,
+          user_id: userId,
+          conversation_id: convId || `conv_${workspaceId}_default`,
           snapshot_hash: context?.snapshot_hash ?? state.latest_snapshot_hash ?? "snapshot_default",
           selected_attack_ids: (context?.selected_attack_ids as string[]) ?? [],
           active_changeset_id: context?.active_changeset_id as string | undefined,
@@ -1068,6 +1651,18 @@ export class ApiServer {
         if (this.chatOrchestrator) {
           try {
             const result = await this.chatOrchestrator.processMessage(contextEnvelope);
+            if (this.chatRepo && convId && result.reply) {
+              await this.chatRepo.saveMessage({
+                id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                conversation_id: convId,
+                workspace_id: workspaceId,
+                role: "assistant",
+                content: result.reply,
+                content_format: "markdown",
+                status: "completed",
+                created_at: new Date().toISOString(),
+              });
+            }
             return finish(200, JSON.stringify({
               message_id: result.message_id,
               conversation_id: result.conversation_id,
@@ -1122,10 +1717,10 @@ export class ApiServer {
           toolCalls.push({
             tool_id: "combat_propose_change",
             input: { workspace_id: workspaceId, mutations: proposedChangeset.mutations },
-            output: { status: "PROPOSED", changeset_id: csId },
+            output: { status: "PROPOSED", proposal_id: csId, changeset_id: csId },
             untrusted_text: true,
           });
-          reply = `I have drafted a changeset proposal to adjust damage for '${targetAttackId}' from 25 to 35. Please review and verify it through the Mechanical Gate.`;
+          reply = `I have drafted a suggested adjustment proposal (changeset proposal) to adjust damage for '${targetAttackId}' from 25 to 35. Please review the proposal and examine the diagnostic findings.`;
         } else if (lowerPrompt.includes("simulate")) {
           toolCalls.push({
             tool_id: "combat_simulate",
@@ -1136,9 +1731,9 @@ export class ApiServer {
           reply = `Simulation completed across 120 frames with deterministic final state hash. Frame timings and hit reactions are consistent.`;
         } else if (lowerPrompt.includes("budget") || lowerPrompt.includes("exceeded")) {
           toolCalls.push({
-            tool_id: "combat_explain_gate",
-            input: { workspace_id: workspaceId, gate_run_id: "gate_budget_exceeded" },
-            output: { verdict: "BUDGET_EXCEEDED" },
+            tool_id: "combat_analyze",
+            input: { workspace_id: workspaceId, subject: "budget_exceeded" },
+            output: { status: "BUDGET_EXCEEDED" },
             untrusted_text: false,
           });
           reply = `The search space is too broad for the allocated execution budget. Please refine search constraints, narrow parameters, or increase computational budget.`;
@@ -1146,10 +1741,29 @@ export class ApiServer {
           reply = `Combat Director active for workspace [${workspaceId}]. Context loaded with snapshot '${contextEnvelope.snapshot_hash}' and ${contextEnvelope.selected_attack_ids.length} selected attack(s). How can I assist with your combat mechanics?`;
         }
 
+        if (this.chatRepo && convId && reply) {
+          try {
+            await this.chatRepo.saveMessage({
+              id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              conversation_id: convId,
+              workspace_id: workspaceId,
+              role: "assistant",
+              content: reply,
+              content_format: "markdown",
+              status: "completed",
+              created_at: new Date().toISOString(),
+            });
+          } catch (repoErr) {
+            console.warn("Could not persist assistant reply:", repoErr);
+          }
+        }
+
         return finish(200, JSON.stringify({
+          conversation_id: convId,
           workspace_id: workspaceId,
           reply,
           tool_calls: toolCalls,
+          proposal: proposedChangeset,
           proposed_changeset: proposedChangeset,
           context_envelope: contextEnvelope,
         }));

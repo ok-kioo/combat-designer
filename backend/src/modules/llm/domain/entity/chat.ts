@@ -62,6 +62,15 @@ export interface ContextItem {
   content: unknown;
 }
 
+export interface Conversation {
+  id: string;
+  user_id: string;
+  workspace_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ConversationIdentity {
   user_id: string;
   workspace_id: string;

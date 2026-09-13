@@ -4,11 +4,9 @@ import { ChangeSetMutationSchema } from "./changeset.js";
 export const TOOL_ALIASES: Record<string, string> = {
   query_combat: "combat_search",
   simulate_changeset: "combat_simulate",
-  run_gate: "combat_verify",
-  explain_gate: "combat_explain_gate",
+  analyze_combat: "combat_analyze",
   propose_changeset: "combat_propose_change",
   withdraw_changeset: "combat_withdraw_change",
-  apply_changeset: "combat_apply_change",
 };
 
 export function resolveCanonicalToolName(toolName: string): string {
@@ -21,12 +19,10 @@ export const CanonicalToolNameSchema = z.enum([
   "list_scenarios",
   "impact_analysis",
   "combat_simulate",
-  "combat_verify",
-  "combat_explain_gate",
+  "combat_analyze",
   "combat_propose_change",
   "combat_get_change",
   "combat_withdraw_change",
-  "combat_apply_change",
 ]);
 export type CanonicalToolName = z.infer<typeof CanonicalToolNameSchema>;
 
@@ -79,34 +75,16 @@ export const CombatSimulateInputSchema = z.object({
 }).strict();
 export type CombatSimulateInput = z.infer<typeof CombatSimulateInputSchema>;
 
-// Tool 6: combat_verify
-export const CombatVerifyInputSchema = z.object({
+// Tool 6: combat_analyze
+export const CombatAnalyzeInputSchema = z.object({
   workspace_id: z.string().min(1),
-  project_id: z.string().min(1),
-  project_revision: z.string().min(1),
-  canonical_snapshot_hash: z.string().min(1),
-  simulation_input_hash: z.string().min(1),
-  simulation_input: z.record(z.unknown()),
-  verification_profile: z.enum(["strict", "fast", "research"]).default("strict"),
-  verification_budget: z.object({
-    max_events: z.number().int().positive().max(10000).default(1000),
-    max_states: z.number().int().positive().max(10000).default(1000),
-    max_cycles: z.number().int().positive().max(1000).default(100),
-    max_steps: z.number().int().positive().max(20000).default(5000),
-  }).default({ max_events: 1000, max_states: 1000, max_cycles: 100, max_steps: 5000 }),
-  rule_set_version: z.string().min(1),
-  verifier_version: z.string().min(1),
+  subject: z.string().min(1),
+  target_attack_id: z.string().optional(),
+  sequence: z.array(z.string()).optional(),
 }).strict();
-export type CombatVerifyInput = z.infer<typeof CombatVerifyInputSchema>;
+export type CombatAnalyzeInput = z.infer<typeof CombatAnalyzeInputSchema>;
 
-// Tool 7: combat_explain_gate
-export const CombatExplainGateInputSchema = z.object({
-  workspace_id: z.string().min(1),
-  gate_run_id: z.string().min(1),
-}).strict();
-export type CombatExplainGateInput = z.infer<typeof CombatExplainGateInputSchema>;
-
-// Tool 8: combat_propose_change
+// Tool 7: combat_propose_change
 export const CombatProposeChangeInputSchema = z.object({
   workspace_id: z.string().min(1),
   base_revision: z.string().min(1),
@@ -116,32 +94,17 @@ export const CombatProposeChangeInputSchema = z.object({
 }).strict();
 export type CombatProposeChangeInput = z.infer<typeof CombatProposeChangeInputSchema>;
 
-// Tool 9: combat_get_change
+// Tool 8: combat_get_change
 export const CombatGetChangeInputSchema = z.object({
   workspace_id: z.string().min(1),
   changeset_id: z.string().min(1),
 }).strict();
 export type CombatGetChangeInput = z.infer<typeof CombatGetChangeInputSchema>;
 
-// Tool 10: combat_withdraw_change
+// Tool 9: combat_withdraw_change
 export const CombatWithdrawChangeInputSchema = z.object({
   workspace_id: z.string().min(1),
   changeset_id: z.string().min(1),
   reason: z.string().min(1),
 }).strict();
 export type CombatWithdrawChangeInput = z.infer<typeof CombatWithdrawChangeInputSchema>;
-
-// Tool 11: combat_apply_change
-export const CombatApplyChangeInputSchema = z.object({
-  workspace_id: z.string().min(1),
-  changeset_id: z.string().min(1),
-  current_project_revision: z.string().min(1).optional(),
-  canonical_snapshot_hash: z.string().optional(),
-  simulation_input_hash: z.string().optional(),
-  simulation_output: z.record(z.unknown()).optional(),
-  gate_result: z.record(z.unknown()).optional(),
-  approved_by: z.string().optional(),
-  approved_at: z.string().optional(),
-  approver_principal: z.record(z.unknown()).optional(),
-}).strict();
-export type CombatApplyChangeInput = z.infer<typeof CombatApplyChangeInputSchema>;

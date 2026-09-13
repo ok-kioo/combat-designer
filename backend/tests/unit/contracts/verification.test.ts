@@ -1,24 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
-  GateVerdictSchema,
   CheckStatusSchema,
   VerificationProfileSchema,
   VerificationRequestSchema,
-  GateResultSchema,
   ViolationCodeSchema,
   EvidenceSchema,
 } from "../../../src/modules/combat/domain/entity/verification.types.js";
 
 describe("SPEC 05 — Verification Contracts & Schemas", () => {
-  it("validates GateVerdict enum values", () => {
-    const validVerdicts = ["PASS", "FAIL", "BLOCKED", "STALE", "BUDGET_EXCEEDED", "ERROR"];
-    for (const v of validVerdicts) {
-      expect(GateVerdictSchema.parse(v)).toBe(v);
-    }
-
-    expect(() => GateVerdictSchema.parse("UNKNOWN")).toThrow();
-  });
-
   it("validates CheckStatus enum values", () => {
     const validStatuses = ["PASS", "FAIL", "BLOCKED", "INCONCLUSIVE", "BUDGET_EXCEEDED", "ERROR"];
     for (const s of validStatuses) {
@@ -88,50 +77,6 @@ describe("SPEC 05 — Verification Contracts & Schemas", () => {
 
     expect(evidence.evidence_id).toBe("ev-01");
     expect(evidence.observed_dps).toBe(200);
-  });
-
-  it("validates GateResultSchema and fails on malformed hash", () => {
-    const validGateResult = {
-      gate_run_id: "run-001",
-      workspace_id: "ws-1",
-      project_revision: "rev-1",
-      canonical_snapshot_hash: "snap-1",
-      simulation_input_hash: "sim-1",
-      simulation_state_hash: "state-1",
-      event_log_hash: "log-1",
-      verification_profile: "strict",
-      rule_set_version: "1.0.0",
-      verifier_version: "0.1.0",
-      verdict: "PASS",
-      checks: [
-        {
-          rule_id: "G01_SIMULATION_INTEGRITY",
-          scenario_id: "s1",
-          status: "PASS",
-          threshold: 64,
-          observed: 64,
-          expected: "64-char hash",
-          message: "Simulation integrity confirmed",
-        },
-      ],
-      violations: [],
-      evidence: [],
-      budgets: {
-        exhausted: false,
-        events_analyzed: 10,
-        states_explored: 10,
-        cycles_checked: 0,
-        steps_taken: 20,
-        evidence_count: 0,
-      },
-      gate_result_hash: "a".repeat(64),
-    };
-
-    expect(GateResultSchema.parse(validGateResult).verdict).toBe("PASS");
-
-    // Short hash fails validation
-    const invalidHash = { ...validGateResult, gate_result_hash: "too_short" };
-    expect(() => GateResultSchema.parse(invalidHash)).toThrow();
   });
 
   it("validates VerificationRequestSchema fails closed on missing workspace_id", () => {

@@ -52,11 +52,9 @@ export class GatewayAuthenticator {
           "combat:read",
           "combat:query",
           "combat:simulate",
-          "combat:verify",
+          "combat:analyze",
           "combat:propose",
           "changeset:withdraw",
-          "changeset:approve",
-          "changeset:apply",
         ],
         authorized_workspaces: ["*"],
       };

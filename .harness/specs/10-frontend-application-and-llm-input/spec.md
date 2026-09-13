@@ -25,11 +25,17 @@ O SPEC 10 constrói as páginas e serviços do frontend necessários para consum
      - `workspace_id`: Contexto de isolamento do tenant.
      - `snapshot_hash`: Hash canônico da revisão atual.
      - `selected_attack_ids`: Conjunto de ataques selecionados no catálogo pelo designer.
-     - `active_changeset_id`: Proposta de ChangeSet em análise (se houver).
+     - `active_analysis_id`: Identificador da análise ativa em inspeção (se houver).
      - `user_prompt`: Mensagem em linguagem natural digitada pelo usuário.
-4. **Preservação de Vereditos e Defesa contra Alucinação**:
-   - Vereditos mecânicos (`PASS`, `FAIL`, `BLOCKED`, `STALE`, `BUDGET_EXCEEDED`) exibidos no frontend ou devolvidos pelo backend não podem ser sobrescritos por respostas geradas pelo LLM.
+4. **Preservação de Fatos e Defesa contra Alucinação**:
+   - Resultados determinísticos de simulação, diagnósticos e findings (`AnalysisResult`) exibidos no frontend ou devolvidos pelo backend não podem ser inventados ou sobrescritos por respostas geradas pelo LLM.
    - Dados textuais não estruturados em exibições de ferramentas e assets continuam marcados com `untrusted_text: true`.
+5. **Acesso Condicionado à Autenticação (Login Obrigatório para Importação e Workspaces)**:
+   - O usuário só pode visualizar e acessar a página de importação de golpes (Onboarding, script C# da Unity e upload de bundles) e interagir com dados de workspace após autenticar-se com seu usuário e senha (ou cadastrar uma nova conta).
+   - Usuários não autenticados são bloqueados pela tela de autenticação (`AuthGuard`).
+6. **Alinhamento Arquitetural: Análise de Combate e Diagnósticos (Sem Gate no Produto)**:
+   - O frontend expõe funcionalidades sob o modelo de **"Combat Analysis"**, **"Diagnósticos de Combate"** ou **"Simulação & Análise"**, focando nas propriedades de combate (frame data, stun loops, burst DPS, counterplay) e na inspeção de **Findings** com evidências determinísticas.
+   - O conceito de "Gate Mecânico" e vereditos de aprovação pertencem exclusivamente ao **harness de desenvolvimento** e são proibidos na interface do usuário do produto.
 
 ---
 
@@ -46,6 +52,7 @@ O SPEC 10 constrói as páginas e serviços do frontend necessários para consum
 | `GET` | `/api/auth/me` | Dados do usuário autenticado a partir do token | `200 OK` (`user`) |
 | `GET` | `/api/workspaces` | Listagem dos projetos pertencentes ao usuário logado | `200 OK` (`workspaces: WorkspaceSummary[]`) |
 | `POST` | `/api/workspaces` | Criação de novo projeto vinculado ao usuário | `201 Created` (`workspace: WorkspaceSummary`) |
+| `DELETE` | `/api/workspaces/:workspace_id` | Exclusão de projeto do usuário proprietário (SPEC 14) | `204 No Content` |
 
 ### 2.2 Rotas Operacionais de Workspace (`/api/workspaces/:workspace_id/*`)
 
@@ -53,29 +60,31 @@ O servidor HTTP do backend (`ApiServer`) disponibiliza as seguintes rotas REST s
 
 | Método | Endpoint | Responsabilidade | Resposta de Sucesso |
 |---|---|---|---|
-| `POST` | `/bundles` | Upload de bundle de exportação e ingestão | `201 Created` |
+| `POST` | `/bundles` | Upload de bundle de exportação e ingestão (requer autenticação) | `201 Created` |
 | `GET` | `/status` | Status do projeto, revisão e histórico | `200 OK` |
 | `GET` | `/attacks` | Listagem/busca de ataques no workspace | `200 OK` (`attacks: AttackSummary[]`) |
 | `GET` | `/attacks/:attack_id` | Detalhes de um ataque específico | `200 OK` (`attack: AttackSummary`) |
 | `POST` | `/simulations` | Execução de simulação determinística | `200 OK` (`simulation: SimulationOutput`) |
-| `POST` | `/verifications` | Execução de verificação via Mechanical Gate | `200 OK` (`gate_result: GateResult`) |
-| `GET` | `/changesets` | Listagem de changesets no workspace | `200 OK` (`changesets: ChangeSetProposal[]`) |
-| `GET` | `/changesets/:changeset_id` | Obtenção de changeset por ID | `200 OK` (`changeset: ChangeSetProposal`) |
-| `POST` | `/changesets` | Proposição de novo ChangeSet | `201 Created` (`changeset: ChangeSetProposal`) |
-| `POST` | `/changesets/:changeset_id/approve` | Aprovação do ChangeSet (perfil humano) | `200 OK` (`changeset: ChangeSetProposal`) |
-| `POST` | `/changesets/:changeset_id/apply` | Aplicação com GateResult PASS obrigatório | `200 OK` (`changeset: ChangeSetProposal`) |
-| `POST` | `/changesets/:changeset_id/withdraw` | Retirada/cancelamento de proposta | `200 OK` (`changeset: ChangeSetProposal`) |
+| `POST` | `/analyses` | Execução de análise de combate e diagnósticos | `200 OK` (`analysis: AnalysisResult`) |
+| `GET` | `/analyses` | Listagem de análises do workspace | `200 OK` (`analyses: AnalysisSummary[]`) |
+| `GET` | `/analyses/:analysis_id` | Detalhes de análise e lista de Findings | `200 OK` (`analysis: AnalysisResult`) |
 | `POST` | `/chat` | Conversação do Diretor de Combate com LLM | `200 OK` (`DirectorChatResponse`) |
+
+> [!WARNING]
+> Rotas legadas de Gate (`POST /verifications`) e de ChangeSet (`/changesets/*`) foram classificadas como `CODE_LEGACY_RUNTIME_GATE` / `MUST_REMOVE_NOW` e desconectadas do runtime.
 
 ---
 
 ## 3. Páginas e Componentes do Frontend
 
-A aplicação frontend organiza-se em páginas acessíveis por navegação contextual, mais a coluna permanente do Diretor de Combate e o módulo de autenticação:
+A aplicação frontend organiza-se segundo a arquitetura de páginas e fluxo de navegação formalizados na **SPEC 14**:
+1. **Landing Page pública (`#landing`)**: Apresentação da plataforma, pilares técnicos (Rust core, Gemini, análise determinística) e CTAs.
+2. **Dashboard de Projetos (`#dashboard`)**: Gestão de workspaces do usuário (listar, criar, excluir com confirmação).
+3. **Workspace Workbench (`#workspace/:workspace_id`)**: Área de trabalho contextualizada no projeto selecionado, contendo as seguintes features:
 
-### 3.1 Combat Explorer (`features/combat-explorer`)
-- Layout principal com seletor de workspace e navegação entre abas.
-- Coluna esquerda: **ProjectPanel** (upload de Export Bundle, resumo de ingestão com processados/quarentenados/conflitos, hash do snapshot canônico e histórico).
+### 3.1 Combat Explorer & Project Ingestion (`features/combat-explorer` & `features/project-workspace`)
+- Layout principal contextualizado pelo projeto ativo com seletor de abas e botão de retorno `← Meus Projetos`.
+- Aba de Ingestão: Download do script C# `CombatExporter.cs` para Unity, upload/colagem do JSON da engine, hash SHA-256 e inspeção de quarentena/conflitos. **Acesso bloqueado até login**.
 - Coluna direita: **DirectorChat** (chat interativo com o Diretor de Combate).
 
 ### 3.2 Attack Catalog (`features/catalog`)
@@ -84,20 +93,15 @@ A aplicação frontend organiza-se em páginas acessíveis por navegação conte
 - Exibição gráfica dos dados de frame: Startup, Active, Recovery, Duração Total, Dano e Janelas de Cancel.
 - Ação **"Add to LLM Context"**: Permite ao designer selecionar um ou mais ataques para alimentar o envelope de contexto do chat.
 
-### 3.3 Simulation & Gate Workbench (`features/simulation-workbench`)
-- Bancada de testes para execução de simulações determinísticas e verificação de regras de segurança.
+### 3.3 Simulation & Analysis Workbench (`features/simulation-workbench`)
+- Bancada de testes para execução de simulações determinísticas e inspeção de diagnósticos mecânicos de combate.
 - Configuração de cenários (atores, HP inicial, ataques equipados) e orçamentos (`max_frames`, `max_iterations`/fuel).
 - Timeline determinística passo-a-passo (eventos de dano, block, transições de estado, hash final).
-- Inspetor de Veredito do Mechanical Gate com badges coloridos (`PASS`, `FAIL`, `BLOCKED`, `STALE`, `BUDGET_EXCEEDED`), relatório de violações e evidências.
+- Inspetor de Diagnósticos de Combate com lista de **Findings** estruturados por severidade (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`), status da análise (`COMPLETED`, `INCONCLUSIVE`, `BUDGET_EXCEEDED`, `STALE`) e inspeção de evidências frame a frame.
 
-### 3.4 ChangeSet Review (`features/changeset-review`)
-- Central de auditoria e ciclo de vida de alterações em combate.
-- Exibição de diff lado a lado (valor base vs. valor proposto para dano, frames de recuperação, janelas de cancel).
-- Verificação do status do Mechanical Gate e botão de solicitação de verificação.
-- Ações acionáveis:
-  - **Approve**: Permite ao designer humano registrar aprovação.
-  - **Apply**: Aplica a proposta à revisão canônica (falha com erro se não houver GateResult PASS válido e recente).
-  - **Withdraw**: Cancela e arquiva a proposta.
+### 3.4 Feature Histórica: ChangeSet Review (`features/changeset-review` — CODE_LEGACY_PRODUCT_DIRECTION)
+- O fluxo de auditoria com botões "Approve" e "Apply" pertencia à direção de produto descontinuada em que o sistema tentava mutar a engine de jogo.
+- Em conformidade com a SPEC 14 (`14.ANALYSIS.1`), a UI expurga termos de ChangeSet e Apply. O designer agora interage diretamente com **Analyses**, **Findings** e **Recomendações Consultivas**.
 
 ### 3.5 Director Chat & LLM Input Engine (`features/director-chat`)
 - Constrói o `LlmPromptContextEnvelope` contendo a intenção do usuário e o estado canônico selecionado no frontend.

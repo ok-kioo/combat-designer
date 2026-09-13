@@ -1,7 +1,7 @@
-//! MechanicalVerifier core engine.
+//! CombatVerifier diagnostic engine.
 //!
 //! Evaluates simulation facts against verification profiles and mechanical safety rules.
-//! Produces deterministic, bounded, fail-closed GateResult with audit hashes.
+//! Produces deterministic, bounded, diagnostic AnalysisReport with audit hashes.
 
 use crate::simulation::engine::SimulationOutput;
 use crate::simulation::sha256::Sha256;
@@ -9,11 +9,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::verification::budget::{VerificationBudget, VerificationBudgetTracker};
 use crate::verification::evidence::Evidence;
-use crate::verification::hash::compute_gate_result_hash;
+use crate::verification::hash::compute_analysis_hash;
 use crate::verification::profile::VerificationProfile;
+use crate::verification::report::{AnalysisReport, AnalysisStatus, CheckResult, CheckStatus};
 use crate::verification::rules::*;
 use crate::verification::stale::{FreshnessContext, StaleChecker};
-use crate::verification::verdict::{CheckResult, CheckStatus, GateResult, GateVerdict};
 use crate::verification::violations::ViolationCode;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,11 +29,11 @@ pub struct VerificationRequest {
     pub verifier_version: String,
 }
 
-pub struct MechanicalVerifier;
+pub struct CombatVerifier;
 
-impl MechanicalVerifier {
+impl CombatVerifier {
     /// Standard verification entrypoint.
-    pub fn verify(request: &VerificationRequest, simulation: &SimulationOutput) -> GateResult {
+    pub fn verify(request: &VerificationRequest, simulation: &SimulationOutput) -> AnalysisReport {
         Self::verify_internal(request, simulation, None)
     }
 
@@ -42,7 +42,7 @@ impl MechanicalVerifier {
         request: &VerificationRequest,
         simulation: &SimulationOutput,
         baseline: &FreshnessContext,
-    ) -> GateResult {
+    ) -> AnalysisReport {
         Self::verify_internal(request, simulation, Some(baseline))
     }
 
@@ -50,7 +50,7 @@ impl MechanicalVerifier {
         request: &VerificationRequest,
         simulation: &SimulationOutput,
         baseline: Option<&FreshnessContext>,
-    ) -> GateResult {
+    ) -> AnalysisReport {
         let mut tracker = VerificationBudgetTracker::new(request.verification_budget);
         let profile_str = match request.verification_profile.kind {
             crate::verification::profile::VerificationProfileKind::Strict => "strict",
@@ -88,7 +88,7 @@ impl MechanicalVerifier {
                 let violations = vec![ViolationCode::StaleRevision];
                 let evidence = Vec::new();
 
-                let gate_hash = compute_gate_result_hash(
+                let analysis_hash = compute_analysis_hash(
                     &request.workspace_id,
                     &request.project_revision,
                     &request.canonical_snapshot_hash,
@@ -98,15 +98,15 @@ impl MechanicalVerifier {
                     profile_str,
                     &request.rule_set_version,
                     &request.verifier_version,
-                    &GateVerdict::Stale,
+                    &AnalysisStatus::Stale,
                     &checks,
                     &violations,
                     &evidence,
                     &budget_res,
                 );
 
-                return GateResult {
-                    gate_run_id: format!("gate_run_{}", &gate_hash[..16]),
+                return AnalysisReport {
+                    analysis_run_id: format!("analysis_run_{}", &analysis_hash[..16]),
                     workspace_id: request.workspace_id.clone(),
                     project_revision: request.project_revision.clone(),
                     canonical_snapshot_hash: request.canonical_snapshot_hash.clone(),
@@ -115,13 +115,13 @@ impl MechanicalVerifier {
                     event_log_hash: String::new(),
                     verification_profile: profile_str.to_string(),
                     rule_set_version: request.rule_set_version.clone(),
-                    verifier_version: request.verifier_version.clone(),
-                    verdict: GateVerdict::Stale,
+                    analyzer_version: request.verifier_version.clone(),
+                    status: AnalysisStatus::Stale,
                     checks,
                     violations,
                     evidence,
                     budgets: budget_res,
-                    gate_result_hash: gate_hash,
+                    analysis_hash,
                 };
             }
         }
@@ -144,7 +144,7 @@ impl MechanicalVerifier {
             let violations = vec![ViolationCode::InvalidSimulation];
             let evidence = Vec::new();
 
-            let gate_hash = compute_gate_result_hash(
+            let analysis_hash = compute_analysis_hash(
                 &request.workspace_id,
                 &request.project_revision,
                 &request.canonical_snapshot_hash,
@@ -154,15 +154,15 @@ impl MechanicalVerifier {
                 profile_str,
                 &request.rule_set_version,
                 &request.verifier_version,
-                &GateVerdict::Error,
+                &AnalysisStatus::Error,
                 &checks,
                 &violations,
                 &evidence,
                 &budget_res,
             );
 
-            return GateResult {
-                gate_run_id: format!("gate_run_{}", &gate_hash[..16]),
+            return AnalysisReport {
+                analysis_run_id: format!("analysis_run_{}", &analysis_hash[..16]),
                 workspace_id: request.workspace_id.clone(),
                 project_revision: request.project_revision.clone(),
                 canonical_snapshot_hash: request.canonical_snapshot_hash.clone(),
@@ -171,13 +171,13 @@ impl MechanicalVerifier {
                 event_log_hash: String::new(),
                 verification_profile: profile_str.to_string(),
                 rule_set_version: request.rule_set_version.clone(),
-                verifier_version: request.verifier_version.clone(),
-                verdict: GateVerdict::Error,
+                analyzer_version: request.verifier_version.clone(),
+                status: AnalysisStatus::Error,
                 checks,
                 violations,
                 evidence,
                 budgets: budget_res,
-                gate_result_hash: gate_hash,
+                analysis_hash,
             };
         }
 
@@ -207,7 +207,7 @@ impl MechanicalVerifier {
             let violations = vec![ViolationCode::ExecutionBudget];
             let evidence = Vec::new();
 
-            let gate_hash = compute_gate_result_hash(
+            let analysis_hash = compute_analysis_hash(
                 &request.workspace_id,
                 &request.project_revision,
                 &request.canonical_snapshot_hash,
@@ -217,15 +217,15 @@ impl MechanicalVerifier {
                 profile_str,
                 &request.rule_set_version,
                 &request.verifier_version,
-                &GateVerdict::BudgetExceeded,
+                &AnalysisStatus::BudgetExceeded,
                 &checks,
                 &violations,
                 &evidence,
                 &budget_res,
             );
 
-            return GateResult {
-                gate_run_id: format!("gate_run_{}", &gate_hash[..16]),
+            return AnalysisReport {
+                analysis_run_id: format!("analysis_run_{}", &analysis_hash[..16]),
                 workspace_id: request.workspace_id.clone(),
                 project_revision: request.project_revision.clone(),
                 canonical_snapshot_hash: request.canonical_snapshot_hash.clone(),
@@ -234,13 +234,13 @@ impl MechanicalVerifier {
                 event_log_hash: String::new(),
                 verification_profile: profile_str.to_string(),
                 rule_set_version: request.rule_set_version.clone(),
-                verifier_version: request.verifier_version.clone(),
-                verdict: GateVerdict::BudgetExceeded,
+                analyzer_version: request.verifier_version.clone(),
+                status: AnalysisStatus::BudgetExceeded,
                 checks,
                 violations,
                 evidence,
                 budgets: budget_res,
-                gate_result_hash: gate_hash,
+                analysis_hash,
             };
         }
 
@@ -333,7 +333,7 @@ impl MechanicalVerifier {
         );
         checks.push(counterplay);
 
-        // 5. Aggregate checks and determine GateVerdict (Fail-Closed)
+        // 5. Aggregate checks and determine AnalysisStatus (Fail-Closed)
         let mut violations = Vec::new();
         let mut evidence = Vec::new();
         let mut has_fail = false;
@@ -371,17 +371,17 @@ impl MechanicalVerifier {
             }
         }
 
-        let verdict = if has_error {
-            GateVerdict::Error
+        let status = if has_error {
+            AnalysisStatus::Error
         } else if has_budget_exceeded {
-            GateVerdict::BudgetExceeded
+            AnalysisStatus::BudgetExceeded
         } else if has_fail {
-            GateVerdict::Fail
+            AnalysisStatus::FindingsDetected
         } else if has_blocked || (has_inconclusive && request.verification_profile.is_fail_closed())
         {
-            GateVerdict::Blocked
+            AnalysisStatus::Blocked
         } else {
-            GateVerdict::Pass
+            AnalysisStatus::Clear
         };
 
         // 6. Sort evidence deterministically
@@ -391,8 +391,8 @@ impl MechanicalVerifier {
         let events_serialized = serde_json::to_vec(&simulation.events).unwrap_or_default();
         let event_log_hash = Sha256::digest(&events_serialized);
 
-        // 8. Compute canonical GateResultHash
-        let gate_result_hash = compute_gate_result_hash(
+        // 8. Compute canonical AnalysisReport hash
+        let analysis_hash = compute_analysis_hash(
             &request.workspace_id,
             &request.project_revision,
             &request.canonical_snapshot_hash,
@@ -402,17 +402,17 @@ impl MechanicalVerifier {
             profile_str,
             &request.rule_set_version,
             &request.verifier_version,
-            &verdict,
+            &status,
             &checks,
             &violations,
             &evidence,
             &budget_res,
         );
 
-        let gate_run_id = format!("gate_run_{}", &gate_result_hash[..16]);
+        let analysis_run_id = format!("analysis_run_{}", &analysis_hash[..16]);
 
-        GateResult {
-            gate_run_id,
+        AnalysisReport {
+            analysis_run_id,
             workspace_id: request.workspace_id.clone(),
             project_revision: request.project_revision.clone(),
             canonical_snapshot_hash: request.canonical_snapshot_hash.clone(),
@@ -421,13 +421,13 @@ impl MechanicalVerifier {
             event_log_hash,
             verification_profile: profile_str.to_string(),
             rule_set_version: request.rule_set_version.clone(),
-            verifier_version: request.verifier_version.clone(),
-            verdict,
+            analyzer_version: request.verifier_version.clone(),
+            status,
             checks,
             violations,
             evidence,
             budgets: budget_res,
-            gate_result_hash,
+            analysis_hash,
         }
     }
 }

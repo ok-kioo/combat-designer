@@ -33,11 +33,11 @@ A LLM deve ser tratada como componente **não confiável** de interpretação de
 1. Definir autoridade ou conceder privilégios a si própria;
 2. Alterar dados canônicos ou modificar o workspace;
 3. Inventar resultados, frame data ou propriedades mecânicas;
-4. Fabricar `SimulationResult` ou `MechanicalValidationResult`;
+4. Fabricar `SimulationResult` ou `AnalysisResult` / `Finding`;
 5. Executar comandos ou ferramentas não autorizadas;
 6. Ignorar regras da aplicação ou alterar seu próprio escopo;
 7. Obedecer a instruções embutidas em dados não confiáveis (assets, nomes de ataques, descrições);
-8. Declarar unilateralmente aprovação (`Gate PASS`) ou aplicação (`APPLIED`).
+8. Declarar unilateralmente aprovação de código ou mutação direta na engine de jogo.
 
 ### 2.3 Fluxo Canônico
 ```text
@@ -57,9 +57,9 @@ Proposal
     ↓
 Deterministic Simulation
     ↓
-Mechanical Validation (Mechanical Validator)
+Combat Analysis (Diagnostics & Findings)
     ↓
-Spec Validation (Spec Validator)
+Spec / Domain Validation
     ↓
 Evidence
     ↓
@@ -68,17 +68,17 @@ LLM Explanation
 Recommendation
 ```
 
-O Combat Director **recomenda**; ele nunca altera a engine. Não existem ações `APPROVE`, `APPLIED` ou ferramenta `combat_apply_change` dentro do Combat Director.
+O Combat Director **recomenda**; ele nunca altera a engine. Não existem ações de mutação direta como `combat_apply_change` dentro do Combat Director.
 
 ---
 
 ## 3. Terminologia Canônica
 
 Na SPEC 13 e em todo o ecossistema conversacional, adota-se a terminologia:
-- **Mechanical Validator**: componente determinístico responsável por responder à pergunta: *"Esta proposta satisfaz as restrições mecânicas (DPS, burst, stun loop, juggle, reaction window)?"*
-- **Mechanical Validation**: processo de avaliação mecânica determinística baseado no `SimulationResult`.
-- **Spec Validator**: componente responsável por responder à pergunta: *"Esta proposta satisfaz as especificações e contratos do projeto?"*
-- **Recommendation**: parecer fundamentado em evidências entregue ao usuário no chat.
+- **Combat Analysis**: processo determinístico de inspeção de propriedades mecânicas baseado no `SimulationResult`, produzindo `Finding[]` e diagnósticos estruturados.
+- **Spec / Domain Validation**: componente responsável por responder à pergunta: *"Esta proposta satisfaz as especificações e contratos canônicos do projeto?"*
+- **Recommendation**: parecer fundamentado em evidências e diagnósticos entregue ao usuário no chat.
+- **Harness Scope**: A terminologia *Mechanical Validation* e vereditos de *Gate* pertencem exclusivamente ao **harness de desenvolvimento** para aceitação de código de implementação.
 
 ---
 
@@ -252,7 +252,7 @@ Rótulos amigáveis:
 - `● Consultando frame data...`
 - `● Buscando combos...`
 - `● Simulando cenário...`
-- `● Validando resultado mecânico...`
+- `● Analisando propriedades de combate...`
 - `● Formulando recomendação...`
 
 **Proibição de Vazamento de Internals**: Detalhes de infraestrutura (`combat_simulate`, nomes de métodos MCP, servidores MCP, `trace_id`, `span_id`, SQL, Cypher) são restritos à observabilidade interna e nunca exibidos no chat.
@@ -349,8 +349,8 @@ Erros internos nunca vazam stack traces, credenciais, endereços de rede ou inst
 - `13.T.9`: Isolamento estrito de Workspace
 - `13.T.10`: Isolamento estrito de Conversação
 - `13.T.11`: Geração de proposta estruturada
-- `13.T.12`: Integração com Mechanical Validator
-- `13.T.13`: Integração com Spec Validator
+- `13.T.12`: Integração com Combat Analysis (diagnósticos e findings)
+- `13.T.13`: Integração com Spec / Domain Validator
 - `13.T.14`: Distinção clara entre FACT, SIMULATION_RESULT, PROPOSAL e RECOMMENDATION
 - `13.T.15`: Erros tipados sem vazamento de detalhes internos
 - `13.T.16`: Propagação de cancelamento
@@ -373,7 +373,7 @@ Erros internos nunca vazam stack traces, credenciais, endereços de rede ou inst
 - `13.SEC.11`: Prevenção de URLs perigosas
 - `13.SEC.12`: Proteção contra context poisoning
 - `13.SEC.13`: Rejeição de SimulationResult forjado pela LLM
-- `13.SEC.14`: Rejeição de ValidationResult forjado pela LLM
+- `13.SEC.14`: Rejeição de AnalysisResult forjado pela LLM
 - `13.SEC.15`: Invocação de ferramenta não autorizada bloqueada com TOOL_DENIED
 - `13.SEC.16`: Invocação de ferramenta fora de escopo bloqueada
 - `13.SEC.17`: Prevenção de escalonamento via metadados de telemetria
@@ -386,5 +386,5 @@ Erros internos nunca vazam stack traces, credenciais, endereços de rede ou inst
 - `13.SEC.24`: Tentativa de escape de delimitador textual (`</COMBAT_DATA>`) tratada como dado
 - `13.SEC.25`: Erro ou confusão do classificador de intenção não burla a tool allowlist
 - `13.SEC.26`: Skill não pode invocar ferramenta não declarada em sua allowlist
-- `13.SEC.27`: Resposta da LLM declarando aprovação mecânica é desconsiderada
+- `13.SEC.27`: Resposta da LLM declarando aprovação ou mutação na engine é desconsiderada
 - `13.SEC.28`: Resposta da LLM declarando resultado de simulação é desconsiderada

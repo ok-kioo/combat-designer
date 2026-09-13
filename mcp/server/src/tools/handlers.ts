@@ -86,15 +86,24 @@ export function createToolHandlers(adapter: ApplicationAdapter) {
       };
     },
 
-    combat_verify: async (ctx: AuthorizedToolCallContext) => {
+    combat_analyze: async (ctx: AuthorizedToolCallContext) => {
       const p = ctx.validated_params as any;
       const request = {
         workspace_id: ctx.workspace_id,
-        project_id: p.project_id,
-        project_revision: p.project_revision,
-        canonical_snapshot_hash: p.canonical_snapshot_hash,
-        simulation_input_hash: p.simulation_input_hash,
-        simulation_input: p.simulation_input,
+        project_id: p.project_id || "default",
+        project_revision: p.project_revision || "rev-1",
+        canonical_snapshot_hash: p.canonical_snapshot_hash || "latest",
+        simulation_input_hash: p.simulation_input_hash || "auto",
+        simulation_input: (p.simulation_input && p.simulation_input.scenario) ? p.simulation_input : {
+          workspace_id: ctx.workspace_id,
+          project_id: p.project_id || "default",
+          model_revision: p.project_revision || "rev-1",
+          scenario: { scenario_id: "auto", actors: [{ actor_id: "hero", team: 1, initial_health: 100, attack_ids: ["atk_1"] }] },
+          inputs: [],
+          config: {
+            budget: { max_frames: 60, max_events: 1000, max_transitions: 1000 },
+          },
+        },
         verification_profile: {
           kind: p.verification_profile || "strict",
           max_sustained_dps: 150,
@@ -114,41 +123,20 @@ export function createToolHandlers(adapter: ApplicationAdapter) {
           max_verification_steps: p.verification_budget?.max_steps ?? 20000,
           max_evidence_items: 500,
         },
-        rule_set_version: p.rule_set_version,
-        verifier_version: p.verifier_version,
+        rule_set_version: p.rule_set_version || "1.0.0",
+        verifier_version: p.verifier_version || "1.0.0",
       };
 
-      const gateResult = await adapter.verify(request);
+      const analysisResult = await adapter.analyze(request as any);
       return {
         classification: "SIMULATION_RESULT",
-        source: "mechanical_gate",
+        source: "combat_analysis",
         workspace_id: ctx.workspace_id,
-        gate_run_id: gateResult.gate_run_id,
-        verdict: gateResult.verdict,
-        gate_result_hash: gateResult.gate_result_hash,
-        violations: gateResult.violations,
-        checks_count: gateResult.checks.length,
-        gate_result: gateResult,
-      };
-    },
-
-    combat_explain_gate: async (ctx: AuthorizedToolCallContext) => {
-      const p = ctx.validated_params as {
-        workspace_id: string;
-        gate_run_id: string;
-        verdict?: string;
-      };
-      const isBudgetExceeded =
-        p.gate_run_id?.includes("budget_exceeded") || p.verdict === "BUDGET_EXCEEDED";
-      const explanation = isBudgetExceeded
-        ? "The search space is too broad for the allocated execution budget. Please refine search constraints, narrow parameters, or increase the computational budget."
-        : `Mechanical Gate run '${p.gate_run_id}' evaluated safety properties deterministic under strict profile.`;
-
-      return {
-        classification: "INFERENCE",
-        workspace_id: ctx.workspace_id,
-        gate_run_id: p.gate_run_id,
-        explanation,
+        analysis_id: analysisResult.analysis_id,
+        status: analysisResult.status,
+        findings: analysisResult.findings,
+        recommendations: analysisResult.recommendations,
+        analysis_result: analysisResult,
       };
     },
 
@@ -189,26 +177,6 @@ export function createToolHandlers(adapter: ApplicationAdapter) {
         classification: "SUGGESTION",
         workspace_id: ctx.workspace_id,
         proposal: withdrawn,
-      };
-    },
-
-    combat_apply_change: async (ctx: AuthorizedToolCallContext) => {
-      const p = ctx.validated_params as any;
-      const applied = await adapter.applyChangeset(
-        ctx.principal,
-        ctx.workspace_id,
-        p.changeset_id,
-        p.current_project_revision,
-        p.canonical_snapshot_hash,
-        p.simulation_input_hash,
-        p.simulation_output,
-        p.gate_result,
-        p.approver_principal
-      );
-      return {
-        classification: "FACT",
-        workspace_id: ctx.workspace_id,
-        proposal: applied,
       };
     },
   };

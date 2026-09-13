@@ -7,15 +7,13 @@ import {
   ListScenariosInputSchema,
   ImpactAnalysisInputSchema,
   CombatSimulateInputSchema,
-  CombatVerifyInputSchema,
-  CombatExplainGateInputSchema,
+  CombatAnalyzeInputSchema,
   CombatProposeChangeInputSchema,
   CombatGetChangeInputSchema,
   CombatWithdrawChangeInputSchema,
-  CombatApplyChangeInputSchema,
 } from "@combat-designer/backend";
 
-export type Mutability = "READ" | "READ_SIMULATION" | "READ_VERIFICATION" | "PROPOSAL" | "WRITE";
+export type Mutability = "READ" | "READ_SIMULATION" | "READ_ANALYSIS" | "PROPOSAL";
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 export type { ResponseClassification };
 
@@ -94,25 +92,14 @@ export class ToolRegistry {
     });
 
     this.register({
-      tool_id: "combat_verify",
-      capability_required: "combat:verify",
+      tool_id: "combat_analyze",
+      capability_required: "combat:analyze",
       workspace_required: true,
-      mutability: "READ_VERIFICATION",
+      mutability: "READ_ANALYSIS",
       gate_required: false,
       risk_level: "medium",
-      input_schema: CombatVerifyInputSchema,
+      input_schema: CombatAnalyzeInputSchema,
       output_classification: "SIMULATION_RESULT",
-    });
-
-    this.register({
-      tool_id: "combat_explain_gate",
-      capability_required: "combat:read",
-      workspace_required: true,
-      mutability: "READ",
-      gate_required: false,
-      risk_level: "low",
-      input_schema: CombatExplainGateInputSchema,
-      output_classification: "INFERENCE",
     });
 
     this.register({
@@ -146,17 +133,6 @@ export class ToolRegistry {
       risk_level: "medium",
       input_schema: CombatWithdrawChangeInputSchema,
       output_classification: "SUGGESTION",
-    });
-
-    this.register({
-      tool_id: "combat_apply_change",
-      capability_required: "changeset:apply",
-      workspace_required: true,
-      mutability: "WRITE",
-      gate_required: true,
-      risk_level: "critical",
-      input_schema: CombatApplyChangeInputSchema,
-      output_classification: "FACT",
     });
   }
 

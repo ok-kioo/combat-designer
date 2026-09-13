@@ -1,6 +1,6 @@
 //! Stale protection evaluating validity against revisions, snapshots, and rules.
 //!
-//! A GateResult is valid ONLY for the exact combination of (workspace, revision,
+//! An AnalysisReport is valid ONLY for the exact combination of (workspace, revision,
 //! snapshot_hash, input_hash, profile, rule_set_version, verifier_version).
 
 use serde::{Deserialize, Serialize};

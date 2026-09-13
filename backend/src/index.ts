@@ -83,6 +83,8 @@ export {
 } from "./infrastructure/provider/knowledge-graph/index.js";
 export * from "./infrastructure/provider/observability/index.js";
 export * from "./infrastructure/provider/auth/in-memory-auth-repository.js";
+export * from "./infrastructure/provider/chat/sqlite-chat-repository.js";
+export type { ChatRepositoryPort } from "./modules/llm/domain/repository/chat-repository-port.js";
 
 // Infrastructure HTTP
 export * from "./infrastructure/http/server.js";

@@ -2,16 +2,12 @@ import { describe, it, expect, beforeEach } from "vitest";
 import type {
   ChangeSetProposal,
   Principal,
-  GateResult,
-  SimulationOutput,
 } from "@combat-designer/backend";
 import type { ChangeSetRepositoryPort } from "../../../src/modules/changeset/domain/repository/changeset-repository-port.js";
 import {
   proposeChangesetUseCase,
   getChangesetUseCase,
   withdrawChangesetUseCase,
-  approveChangesetUseCase,
-  applyChangesetUseCase,
 } from "../../../src/index.js";
 
 class InMemoryChangeSetRepository implements ChangeSetRepositoryPort {
@@ -45,7 +41,7 @@ class InMemoryChangeSetRepository implements ChangeSetRepositoryPort {
   }
 }
 
-describe("ChangeSet Lifecycle & Application Boundaries", () => {
+describe("ChangeSet Lifecycle & Consultative Boundaries", () => {
   let repo: InMemoryChangeSetRepository;
 
   beforeEach(() => {
@@ -55,63 +51,15 @@ describe("ChangeSet Lifecycle & Application Boundaries", () => {
   const humanPrincipal: Principal = {
     principal_id: "human_lead",
     principal_type: "human",
-    capabilities: ["combat:read", "combat:propose", "changeset:approve", "changeset:apply"],
+    capabilities: ["combat:read", "combat:propose"],
     authorized_workspaces: ["ws-1"],
   };
 
   const llmPrincipal: Principal = {
     principal_id: "llm_combat_director",
     principal_type: "llm",
-    capabilities: ["combat:read", "combat:query", "combat:simulate", "combat:verify", "combat:propose"],
+    capabilities: ["combat:read", "combat:query", "combat:simulate", "combat:propose"],
     authorized_workspaces: ["ws-1"],
-  };
-
-  const mockSimulation: SimulationOutput = {
-    status: "COMPLETED",
-    total_frames: 120,
-    events: [],
-    final_state_hash: "hash_sim_state_abc",
-    metrics: {
-      total_frames: 120,
-      damage: 10,
-      hits: 1,
-      blocked_hits: 0,
-      misses: 0,
-      stun_frames: 0,
-      recovery_frames: 10,
-      resource_spent: 5,
-      resource_remaining: 95,
-      state_transitions: 2,
-      cancel_count: 0,
-      launch_count: 0,
-      juggle_count: 0,
-    },
-  };
-
-  const mockGatePass: GateResult = {
-    workspace_id: "ws-1",
-    project_revision: "rev-1",
-    canonical_snapshot_hash: "snap_hash_abc",
-    simulation_input_hash: "sim_input_hash_xyz",
-    simulation_state_hash: "hash_sim_state_abc",
-    event_log_hash: "event_log_hash_123",
-    verification_profile: "strict",
-    gate_run_id: "gate-run-777",
-    rule_set_version: "1.0.0",
-    verifier_version: "1.0.0",
-    verdict: "PASS",
-    checks: [],
-    violations: [],
-    evidence: [],
-    budgets: {
-      exhausted: false,
-      events_analyzed: 10,
-      states_explored: 5,
-      cycles_checked: 0,
-      steps_taken: 15,
-      evidence_count: 0,
-    },
-    gate_result_hash: "gate_hash_pass_1234567890123456789012345678901234567890123456789012345678901234",
   };
 
   it("proposes a changeset in 'proposed' status and preserves idempotency", async () => {
@@ -133,7 +81,6 @@ describe("ChangeSet Lifecycle & Application Boundaries", () => {
     });
 
     expect(proposal1.status).toBe("proposed");
-    expect(proposal1.applied_at).toBeUndefined();
 
     // Idempotent retry returns identical proposal
     const proposal2 = await proposeChangesetUseCase(repo, {
@@ -156,223 +103,69 @@ describe("ChangeSet Lifecycle & Application Boundaries", () => {
     expect(proposal2.changeset_id).toBe(proposal1.changeset_id);
   });
 
-  it("rejects approval by LLM principal (HUMAN_APPROVAL_REQUIRED)", async () => {
+  it("retrieves a proposal by id", async () => {
     const proposal = await proposeChangesetUseCase(repo, {
       workspace_id: "ws-1",
       base_revision: "rev-1",
       target_revision: "rev-2",
-      proposed_by: llmPrincipal.principal_id,
+      proposed_by: humanPrincipal.principal_id,
       mutations: [
         {
           type: "attack_damage",
           attack_id: "atk_1",
           current_damage: 10,
-          proposed_damage: 15,
-          reason: "Buff",
+          proposed_damage: 20,
+          reason: "Manual adjustment",
         },
       ],
     });
 
-    await expect(
-      approveChangesetUseCase(repo, llmPrincipal, {
-        workspace_id: "ws-1",
-        changeset_id: proposal.changeset_id,
-        current_project_revision: "rev-1",
-        gate_result: mockGatePass,
-        simulation_output: mockSimulation,
-        decision: "approve",
-      })
-    ).rejects.toThrow(/Only human principals can approve changesets/);
+    const retrieved = await getChangesetUseCase(repo, "ws-1", proposal.changeset_id);
+
+    expect(retrieved).not.toBeNull();
+    expect(retrieved?.changeset_id).toBe(proposal.changeset_id);
+    expect(retrieved?.status).toBe("proposed");
   });
 
-  it("allows approval by authenticated human principal with GateResult PASS", async () => {
+  it("withdraws a proposed changeset with a reason", async () => {
     const proposal = await proposeChangesetUseCase(repo, {
       workspace_id: "ws-1",
       base_revision: "rev-1",
       target_revision: "rev-2",
-      proposed_by: llmPrincipal.principal_id,
+      proposed_by: humanPrincipal.principal_id,
       mutations: [
         {
           type: "attack_damage",
           attack_id: "atk_1",
           current_damage: 10,
-          proposed_damage: 15,
-          reason: "Buff",
+          proposed_damage: 20,
+          reason: "Manual adjustment",
         },
       ],
     });
 
-    const approved = await approveChangesetUseCase(repo, humanPrincipal, {
-      workspace_id: "ws-1",
-      changeset_id: proposal.changeset_id,
-      current_project_revision: "rev-1",
-      gate_result: mockGatePass,
-      simulation_output: mockSimulation,
-      decision: "approve",
-    });
+    const withdrawn = await withdrawChangesetUseCase(
+      repo,
+      "ws-1",
+      proposal.changeset_id,
+      "Superseded by alternative design"
+    );
 
-    expect(approved.status).toBe("approved");
-    expect(approved.approved_by).toBe(humanPrincipal.principal_id);
-    expect(approved.approved_at).toBeDefined();
+    expect(withdrawn.status).toBe("withdrawn");
+
+    const retrieved = await getChangesetUseCase(repo, "ws-1", proposal.changeset_id);
+    expect(retrieved?.status).toBe("withdrawn");
   });
 
-  it("rejects approval if GateResult verdict is not PASS", async () => {
-    const proposal = await proposeChangesetUseCase(repo, {
-      workspace_id: "ws-1",
-      base_revision: "rev-1",
-      target_revision: "rev-2",
-      proposed_by: llmPrincipal.principal_id,
-      mutations: [
-        {
-          type: "attack_damage",
-          attack_id: "atk_1",
-          current_damage: 10,
-          proposed_damage: 15,
-          reason: "Buff",
-        },
-      ],
-    });
-
-    const gateFail: GateResult = {
-      ...mockGatePass,
-      verdict: "FAIL",
-    };
-
+  it("rejects proposal with empty mutations", async () => {
     await expect(
-      approveChangesetUseCase(repo, humanPrincipal, {
+      proposeChangesetUseCase(repo, {
         workspace_id: "ws-1",
-        changeset_id: proposal.changeset_id,
-        current_project_revision: "rev-1",
-        gate_result: gateFail,
-        simulation_output: mockSimulation,
-        decision: "approve",
+        base_revision: "rev-1",
+        target_revision: "rev-2",
+        proposed_by: humanPrincipal.principal_id,
+        mutations: [],
       })
-    ).rejects.toThrow(/Cannot approve ChangeSet without a valid PASS GateResult/);
-  });
-
-  it("applies an approved changeset when all preconditions are satisfied", async () => {
-    const proposal = await proposeChangesetUseCase(repo, {
-      workspace_id: "ws-1",
-      base_revision: "rev-1",
-      target_revision: "rev-2",
-      proposed_by: llmPrincipal.principal_id,
-      mutations: [
-        {
-          type: "attack_damage",
-          attack_id: "atk_1",
-          current_damage: 10,
-          proposed_damage: 15,
-          reason: "Buff",
-        },
-      ],
-    });
-
-    await approveChangesetUseCase(repo, humanPrincipal, {
-      workspace_id: "ws-1",
-      changeset_id: proposal.changeset_id,
-      current_project_revision: "rev-1",
-      gate_result: mockGatePass,
-      simulation_output: mockSimulation,
-      decision: "approve",
-    });
-
-    const applied = await applyChangesetUseCase(repo, humanPrincipal, {
-      workspace_id: "ws-1",
-      changeset_id: proposal.changeset_id,
-      current_project_revision: "rev-1",
-      canonical_snapshot_hash: "snap_hash_abc",
-      simulation_input_hash: "sim_input_hash_xyz",
-      simulation_output: mockSimulation,
-      gate_result: mockGatePass,
-      approver_principal: humanPrincipal,
-    });
-
-    expect(applied.status).toBe("applied");
-    expect(applied.applied_at).toBeDefined();
-
-    // Replay attack rejected
-    await expect(
-      applyChangesetUseCase(repo, humanPrincipal, {
-        workspace_id: "ws-1",
-        changeset_id: proposal.changeset_id,
-        current_project_revision: "rev-1",
-        canonical_snapshot_hash: "snap_hash_abc",
-        simulation_input_hash: "sim_input_hash_xyz",
-        simulation_output: mockSimulation,
-        gate_result: mockGatePass,
-        approver_principal: humanPrincipal,
-      })
-    ).rejects.toThrow(/Replay detected/);
-  });
-
-  it("rejects apply if LLM principal attempts to apply directly", async () => {
-    const proposal = await proposeChangesetUseCase(repo, {
-      workspace_id: "ws-1",
-      base_revision: "rev-1",
-      target_revision: "rev-2",
-      proposed_by: llmPrincipal.principal_id,
-      mutations: [
-        {
-          type: "attack_damage",
-          attack_id: "atk_1",
-          current_damage: 10,
-          proposed_damage: 15,
-          reason: "Buff",
-        },
-      ],
-    });
-
-    await expect(
-      applyChangesetUseCase(repo, llmPrincipal, {
-        workspace_id: "ws-1",
-        changeset_id: proposal.changeset_id,
-        current_project_revision: "rev-1",
-        canonical_snapshot_hash: "snap_hash_abc",
-        simulation_input_hash: "sim_input_hash_xyz",
-        simulation_output: mockSimulation,
-        gate_result: mockGatePass,
-      })
-    ).rejects.toThrow(/lacks required capability 'changeset:apply'/);
-  });
-
-  it("rejects apply if revision race is detected (stale revision)", async () => {
-    const proposal = await proposeChangesetUseCase(repo, {
-      workspace_id: "ws-1",
-      base_revision: "rev-1",
-      target_revision: "rev-2",
-      proposed_by: llmPrincipal.principal_id,
-      mutations: [
-        {
-          type: "attack_damage",
-          attack_id: "atk_1",
-          current_damage: 10,
-          proposed_damage: 15,
-          reason: "Buff",
-        },
-      ],
-    });
-
-    await approveChangesetUseCase(repo, humanPrincipal, {
-      workspace_id: "ws-1",
-      changeset_id: proposal.changeset_id,
-      current_project_revision: "rev-1",
-      gate_result: mockGatePass,
-      simulation_output: mockSimulation,
-      decision: "approve",
-    });
-
-    // Project revision advanced from rev-1 to rev-2
-    await expect(
-      applyChangesetUseCase(repo, humanPrincipal, {
-        workspace_id: "ws-1",
-        changeset_id: proposal.changeset_id,
-        current_project_revision: "rev-2",
-        canonical_snapshot_hash: "snap_hash_abc",
-        simulation_input_hash: "sim_input_hash_xyz",
-        simulation_output: mockSimulation,
-        gate_result: mockGatePass,
-        approver_principal: humanPrincipal,
-      })
-    ).rejects.toThrow(/Revision race detected/);
+    ).rejects.toThrow();
   });
 });

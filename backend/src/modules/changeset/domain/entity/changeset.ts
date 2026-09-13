@@ -1,11 +1,9 @@
+// CODE_LEGACY_PRODUCT_DIRECTION: ChangeSet is retained strictly as internal migration storage; product layer uses Proposal / Recommendation / Suggested Adjustment.
 import { z } from "zod";
 
 export const ChangeSetStatusSchema = z.enum([
   "proposed",
   "simulated",
-  "verified",
-  "approved",
-  "applied",
   "withdrawn",
   "rejected",
 ]);
@@ -85,11 +83,6 @@ export const ChangeSetProposalSchema = z.object({
   mutations: z.array(ChangeSetMutationSchema).min(1),
   simulation_id: z.string().optional(),
   simulation_hash: z.string().optional(),
-  gate_run_id: z.string().optional(),
-  gate_verdict: z.string().optional(),
-  approved_by: z.string().nullable().optional(),
-  approved_at: z.string().nullable().optional(),
-  applied_at: z.string().nullable().optional(),
   created_at: z.string().min(1),
   idempotency_key: z.string().optional(),
 }).strict();

@@ -79,7 +79,7 @@ permanece inalterado por esse modelo de entrega.
 O pipeline é estritamente unidirecional: engine -> Export Bundle -> backend. Em nenhuma etapa o
 backend, o MCP ou a LLM escrevem, corrigem ou reexportam qualquer arquivo de volta para o projeto
 Unity/Unreal/Godot do usuário. O produto do sistema para o usuário é sempre um artefato interno
-(ChangeSet proposto, relatório do Mechanical Gate, análise de combos/impacto) que o próprio
+(relatório de Combat Analysis, diagnósticos com evidências, análise de combos/impacto ou recomendação consultiva) que o próprio
 designer decide se e como replica manualmente na engine — nunca uma mutação automática de asset.
 Isso é um invariante, não uma limitação atual: nenhuma feature futura pode introduzir escrita no
 projeto de origem sem revisar este invariante explicitamente via FIC.

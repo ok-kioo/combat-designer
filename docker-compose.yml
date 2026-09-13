@@ -83,7 +83,6 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
-      - VITE_API_URL=http://localhost:3001
       - API_URL=http://api:3001
     depends_on:
       api:

@@ -2,7 +2,6 @@ import {
   CombatIntentSchema,
   type CombatIntent,
   type Principal,
-  type GateResult,
   McpError,
 } from "@combat-designer/backend";
 import type { McpGatewayRouter } from "../../../gateway/src/routing/router.js";
@@ -63,22 +62,9 @@ export class LlmOrchestrator {
       }
 
       case "verify": {
-        return await this.gateway.execute(principal, "combat_verify", {
+        return await this.gateway.execute(principal, "combat_analyze", {
           workspace_id: intent.workspace_id,
-          project_id: intent.project_id,
-          project_revision: intent.project_revision,
-          canonical_snapshot_hash: intent.canonical_snapshot_hash,
-          simulation_input_hash: intent.simulation_input_hash,
-          simulation_input: { scenario: { scenario_id: "test" }, config: { budget: { max_frames: 60 } } },
-          verification_profile: intent.profile,
-          verification_budget: {
-            max_events: 1000,
-            max_states: 1000,
-            max_cycles: 50,
-            max_steps: 2000,
-          },
-          rule_set_version: "1.0.0",
-          verifier_version: "1.0.0",
+          subject: "Combat Analysis",
         });
       }
 
@@ -122,31 +108,15 @@ export class LlmOrchestrator {
     }
   }
 
-  preserveMechanicalVerdict(gateResult: GateResult): string {
-    // Mechanical Gate is the sole authority
-    switch (gateResult.verdict) {
-      case "PASS":
-        return "PASS";
-      case "FAIL":
-        return "FAIL";
-      case "BLOCKED":
-        return "BLOCKED";
-      case "STALE":
-        return "STALE";
-      case "BUDGET_EXCEEDED":
-        return "BUDGET_EXCEEDED";
-      case "ERROR":
-        return "ERROR";
-      default:
-        return "UNKNOWN";
-    }
+  preserveAnalysisStatus(analysisResult: { status: string }): string {
+    return analysisResult.status;
   }
 
-  validateLlmClaim(claimedVerdict: string, authoritativeGateResult: GateResult): void {
-    if (claimedVerdict === "PASS" && authoritativeGateResult.verdict !== "PASS") {
+  validateLlmClaim(claimedStatus: string, authoritativeAnalysis: { status: string; findings: any[] }): void {
+    if (claimedStatus === "COMPLETED_CLEAN" && authoritativeAnalysis.findings.length > 0) {
       throw new McpError(
-        "MECHANICAL_GATE_FAILED",
-        `Fabricated verdict rejected: LLM claimed PASS, but authoritative Mechanical Gate verdict is '${authoritativeGateResult.verdict}'.`
+        "INVALID_REQUEST",
+        `Fabricated claim rejected: LLM claimed clean analysis, but authoritative findings exist.`
       );
     }
   }

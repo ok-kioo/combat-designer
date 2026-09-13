@@ -61,7 +61,7 @@ export class SimulationWorkbenchController {
     }
   }
 
-  public async runVerification(options: { shouldFail?: boolean; budgetExceeded?: boolean } = {}): Promise<any> {
+  public async runAnalysis(options: { subject?: string; targetAttackId?: string } = {}): Promise<any> {
     if (!this.state.simulationResult) {
       await this.runSimulation();
     }
@@ -70,29 +70,29 @@ export class SimulationWorkbenchController {
     this.state.error = undefined;
 
     try {
-      const result = await this.apiClient.verify(
-        this.workspaceId,
-        {
-          workspace_id: this.workspaceId,
-          scenario_id: this.state.scenario.scenario_id,
-          should_fail: options.shouldFail,
-          budget_exceeded: options.budgetExceeded,
-        },
-        this.state.simulationResult
-      );
+      const result = await this.apiClient.analyzeCombat(this.workspaceId, {
+        workspace_id: this.workspaceId,
+        subject: options.subject || "Workbench Combat Analysis",
+        target_attack_id: options.targetAttackId,
+      });
 
-      this.state.gateResult = {
-        gate_run_id: result.gate_result.gate_run_id,
-        verdict: result.gate_result.verdict,
-        violations: result.gate_result.violations ?? [],
-        checks_count: result.gate_result.summary?.total_checks ?? result.gate_result.checks?.length ?? 0,
-        explanation: result.gate_result.explanation,
+      this.state.analysisResult = {
+        analysis_id: result.id || result.analysis_id || "an_auto",
+        status: result.status || "COMPLETED",
+        findings: (result.findings ?? []).map((f: any) => ({
+          id: f.id || "fnd_1",
+          code: f.type || f.code || "DIAGNOSTIC",
+          severity: f.severity || "info",
+          message: f.description || f.title || "",
+        })),
+        findings_count: (result.findings ?? []).length,
+        summary: result.summary,
       };
       this.state.isRunning = false;
-      return this.state.gateResult;
+      return this.state.analysisResult;
     } catch (err: any) {
       this.state.isRunning = false;
-      this.state.error = err?.message || "Verification failed";
+      this.state.error = err?.message || "Analysis failed";
       throw err;
     }
   }
@@ -116,14 +116,13 @@ export class SimulationWorkbenchController {
             status: this.state.simulationResult.status,
           }
         : null,
-      hasGateResult: Boolean(this.state.gateResult),
-      gateResult: this.state.gateResult
+      hasAnalysisResult: Boolean(this.state.analysisResult),
+      analysisResult: this.state.analysisResult
         ? {
-            gateRunId: this.state.gateResult.gate_run_id,
-            verdict: this.state.gateResult.verdict,
-            violationsCount: this.state.gateResult.violations.length,
-            violations: this.state.gateResult.violations,
-            checksCount: this.state.gateResult.checks_count,
+            analysisId: this.state.analysisResult.analysis_id,
+            status: this.state.analysisResult.status,
+            findingsCount: this.state.analysisResult.findings.length,
+            findings: this.state.analysisResult.findings,
           }
         : null,
       isRunning: this.state.isRunning,
@@ -133,8 +132,8 @@ export class SimulationWorkbenchController {
 
   public renderHtml(): string {
     const model = this.renderModel();
-    const verdictBadgeClass = model.gateResult
-      ? `badge-verdict badge-${model.gateResult.verdict.toLowerCase()}`
+    const statusBadgeClass = model.analysisResult
+      ? `badge-status badge-${model.analysisResult.status.toLowerCase()}`
       : "";
 
     const eventsRows = model.simulation?.events
@@ -151,10 +150,10 @@ export class SimulationWorkbenchController {
     return `
       <section class="simulation-workbench" data-workspace="${model.workspaceId}">
         <header class="workbench-header">
-          <h2>Simulation & Gate Workbench</h2>
+          <h2>Simulation & Analysis Workbench</h2>
           <div class="workbench-actions">
             <button class="btn btn-primary" id="btn-run-sim">Run Simulation</button>
-            <button class="btn btn-secondary" id="btn-run-gate">Verify Gate</button>
+            <button class="btn btn-secondary" id="btn-run-analysis">Run Analysis</button>
           </div>
         </header>
 
@@ -167,13 +166,13 @@ export class SimulationWorkbenchController {
           </div>
 
           <div class="workbench-card">
-            <h3>Mechanical Gate Verdict</h3>
+            <h3>Combat Analysis Diagnostics</h3>
             ${
-              model.gateResult
-                ? `<div class="${verdictBadgeClass}"><strong>${model.gateResult.verdict}</strong></div>
-                   <p>Run ID: ${model.gateResult.gateRunId}</p>
-                   <p>Violations: ${model.gateResult.violationsCount}</p>`
-                : `<p class="muted">No gate verification run yet.</p>`
+              model.analysisResult
+                ? `<div class="${statusBadgeClass}"><strong>${model.analysisResult.status}</strong></div>
+                   <p>Analysis ID: ${model.analysisResult.analysisId}</p>
+                   <p>Findings: ${model.analysisResult.findingsCount}</p>`
+                : `<p class="muted">No combat analysis run yet.</p>`
             }
           </div>
         </div>

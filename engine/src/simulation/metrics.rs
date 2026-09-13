@@ -2,7 +2,7 @@
 //!
 //! Architectural rule:
 //! Metrics are strictly observational. They measure "WHAT HAPPENS?".
-//! They NEVER make PASS/FAIL or safety determinations (that belongs to Spec 05 Mechanical Gate).
+//! They NEVER make PASS/FAIL or safety determinations (analysis and diagnostics belong to Spec 05 Combat Analysis).
 
 use serde::{Deserialize, Serialize};
 

@@ -178,7 +178,7 @@ MCP Gateway: `x-authorized-workspaces` sai também de lá. O `Principal` passado
 
 - **SPEC 00 (FIC)**: `approved_by`, quando utilizado, deve referenciar um `User.id` real em vez de texto livre.
 
-- **SPEC 10 (Frontend Application)**: A interface web incorpora componentes visuais de login (`LoginForm`), cadastro (`RegisterForm`), gestão de sessão com auto-refresh no `ApiClient`, barra superior de perfil e seletor de workspaces restrito aos projetos de propriedade do usuário autenticado (`GET /api/workspaces`), além de botão de logout.
+- **SPEC 10 e SPEC 14 (Frontend Pages & Workspace Lifecycle)**: A interface web incorpora Landing Page pública, Dashboard de Projetos do usuário com gestão completa (criação via `POST /api/workspaces`, listagem via `GET /api/workspaces` e exclusão via `DELETE /api/workspaces/:workspace_id` restrita ao proprietário), além do Workspace Workbench contextualizado para trabalho profundo.
 
 ## Regras de segurança obrigatórias
 
@@ -212,9 +212,9 @@ MCP Gateway: `x-authorized-workspaces` sai também de lá. O `Principal` passado
 
 - `Workspace` sempre possui um `owner_user_id` válido.
 
-- `WorkspaceMembership` não é necessário para autorizar acesso na v1.
+- O frontend disponibiliza formulários de Login e Cadastro (`features/auth`), gerenciando a sessão e bloqueando o acesso à página de importação de golpes (Onboarding, script Unity e upload de bundles) até que o usuário esteja autenticado.
 
-- O frontend disponibiliza formulários de Login e Cadastro (`features/auth`), gerenciando a sessão e exibindo exclusivamente os workspaces de titularidade do usuário logado.
+- O frontend exibe exclusivamente os workspaces de titularidade do usuário autenticado e utiliza terminologia de "Combat Analysis" e "Diagnósticos", reservando o conceito de Gate exclusivamente para a verificação de código no harness de desenvolvimento.
 
 - `npm run validate-fic` cobrindo o FIC desta spec roda verde.
 
@@ -308,7 +308,7 @@ audit:
 
   changed: true
 
-  detail: "approved_by em FIC/GateResult passa a referenciar User.id real"
+  detail: "approved_by em aprovações de governança (FIC) passa a referenciar User.id real"
 
 tests:
 

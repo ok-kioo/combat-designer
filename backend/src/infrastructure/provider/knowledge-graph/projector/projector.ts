@@ -126,6 +126,21 @@ export async function projectCanonicalSnapshot(
         resource_costs: atk.resource_costs,
         provenance: atk.provenance,
       });
+
+      // 1b. Project Character and HAS_ATTACK relation only if assigned (never project fake UNASSIGNED node)
+      if (atk.character_id && atk.assignment_status === "ASSIGNED") {
+        const mergeCharQuery = `
+          MERGE (c:Character {workspace_id: $workspace_id, character_id: $character_id})
+          ON CREATE SET c.name = $character_name
+          MERGE (c)-[:HAS_ATTACK {workspace_id: $workspace_id}]->(a:Attack {workspace_id: $workspace_id, attack_id: $attack_id})
+        `;
+        await session.run(mergeCharQuery, {
+          workspace_id: snapshot.workspace_id,
+          character_id: atk.character_id,
+          character_name: atk.character_id,
+          attack_id: atk.id,
+        });
+      }
     }
 
     // 2. Finalize: Set ProjectionMetadata status to CURRENT

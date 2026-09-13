@@ -43,6 +43,8 @@ export interface ToolCallPreview {
 
 export interface ProposedChangesetCard {
   changeset_id: string;
+  proposal_id?: string;
+  id?: string;
   target_revision: string;
   mutations: Array<{
     type: string;
@@ -52,6 +54,8 @@ export interface ProposedChangesetCard {
     reason: string;
   }>;
 }
+
+export type ProposalAdjustmentCard = ProposedChangesetCard;
 
 export interface ChatMessage {
   id: string;

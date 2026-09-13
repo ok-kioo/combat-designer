@@ -1,3 +1,10 @@
+# ==============================================================================
+# Feature Impact Contract (FIC) Template
+#
+# NOTE: The 'approval.gate_run_id' and 'approval' fields track development harness
+# governance for pull request and release acceptance by engineering agents.
+# They do NOT represent a runtime product approval mechanism.
+# ==============================================================================
 feature_id: example-feature-001
 title: Example Feature Title
 owner: Implementation Agent
