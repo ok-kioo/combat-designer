@@ -27,13 +27,16 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - HOST=0.0.0.0
       - PORT=3001
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - ENGINE_URL=http://engine:3003
-      - DATABASE_URL=postgres://${POSTGRES_USER:-combat_designer}:${POSTGRES_PASSWORD:-combat_designer_dev_secret}@postgres:5432/${POSTGRES_DB:-combat_designer}
+      - DATABASE_URL=postgres://${POSTGRES_USER:-combat_designer}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-combat_designer}
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=${NEO4J_USER:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-combat_designer_dev_secret_change_me}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:?NEO4J_PASSWORD is required}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,6 +64,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3002
       - API_URL=http://api:3001
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
     depends_on:
       api:
         condition: service_healthy
@@ -84,6 +88,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
       - API_URL=http://api:3001
+      - BACKEND_ALLOWED_HOSTS=api
     depends_on:
       api:
         condition: service_healthy
@@ -103,7 +108,7 @@ services:
       - "5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-combat_designer}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-combat_designer_dev_secret}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_DB=${POSTGRES_DB:-combat_designer}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -123,7 +128,7 @@ services:
       - "7474:7474" # HTTP Browser UI
       - "7687:7687" # Bolt Protocol
     environment:
-      - NEO4J_AUTH=${NEO4J_AUTH:-neo4j/combat_designer_dev_secret_change_me}
+      - NEO4J_AUTH=${NEO4J_AUTH:?NEO4J_AUTH is required}
       - NEO4J_PLUGINS=["apoc"]
       - NEO4J_dbms_memory_pagecache_size=512M
       - NEO4J_dbms_memory_heap_initial__size=512M

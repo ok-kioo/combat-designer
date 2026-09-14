@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { AccessTokenClaims } from "../domain/entity/auth.entity.js";
 
 export const DEFAULT_JWT_SECRET =
-  process.env.JWT_SECRET || "combat-designer-jwt-secret-key-2026-production-ready";
+  process.env.JWT_SECRET;
 export const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
 export const DEFAULT_REFRESH_TOKEN_TTL_DAYS = 30;
 
@@ -20,9 +20,12 @@ export class TokenService {
   private readonly accessTokenTtl: number;
 
   constructor(
-    secret: string = DEFAULT_JWT_SECRET,
+    secret: string | undefined = DEFAULT_JWT_SECRET,
     accessTokenTtl = DEFAULT_ACCESS_TOKEN_TTL_SECONDS
   ) {
+    if (!secret || secret.trim() === "") {
+      throw new Error("JWT_SECRET_REQUIRED: JWT_SECRET must be provided by the runtime environment");
+    }
     this.secret = secret;
     this.accessTokenTtl = accessTokenTtl;
   }

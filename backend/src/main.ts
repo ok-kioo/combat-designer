@@ -17,6 +17,8 @@ const PORT = parseInt(process.env.PORT || "3001", 10);
 const DEFAULT_WORKSPACE = process.env.DEFAULT_WORKSPACE || "ws-default";
 
 async function main() {
+  validateRuntimeSecrets();
+
   console.log("==================================================");
   console.log("⚔️  COMBAT DESIGNER — Starting Application Server");
   console.log("==================================================");
@@ -58,6 +60,20 @@ async function main() {
   console.log("  3. Consultative proposals without engine mutation");
   console.log("  4. Combat Director Chat (Gemini LLM / Function Calling)");
   console.log("==================================================\n");
+}
+
+function validateRuntimeSecrets(): void {
+  const missing = ["JWT_SECRET"].filter((name) => !process.env[name] || process.env[name]?.trim() === "");
+  if (process.env.NODE_ENV === "production" && (!process.env.DATABASE_URL || process.env.DATABASE_URL.trim() === "")) {
+    missing.push("DATABASE_URL");
+  }
+  if (process.env.NEO4J_URI) {
+    if (!process.env.NEO4J_USER || process.env.NEO4J_USER.trim() === "") missing.push("NEO4J_USER");
+    if (!process.env.NEO4J_PASSWORD || process.env.NEO4J_PASSWORD.trim() === "") missing.push("NEO4J_PASSWORD");
+  }
+  if (missing.length > 0) {
+    throw new Error(`Missing required runtime secret(s): ${missing.join(", ")}`);
+  }
 }
 
 async function seedDefaultWorkspace(server: ApiServer, workspaceId: string): Promise<void> {

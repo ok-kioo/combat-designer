@@ -5,6 +5,10 @@ describe("TokenService Unit Tests", () => {
   const secret = "test-secret-key-at-least-32-characters-long!";
   const tokenService = new TokenService(secret, 60);
 
+  it("should fail explicitly when an empty JWT secret is provided", () => {
+    expect(() => new TokenService("", 60)).toThrow("JWT_SECRET_REQUIRED");
+  });
+
   it("should sign and successfully verify an access token with canonical claims", () => {
     const payload = {
       sub: "usr-123",
@@ -62,4 +66,3 @@ describe("TokenService Unit Tests", () => {
     expect(rt1.hash).not.toBe(rt2.hash);
   });
 });
-

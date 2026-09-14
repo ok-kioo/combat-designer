@@ -83,6 +83,7 @@ export interface WorkspaceState {
 
 export interface ApiServerConfig {
   port?: number;
+  host?: string;
   tracer?: NativeTracer;
   metrics?: NativeMetricsRegistry;
   logger?: StructuredLogger;
@@ -105,9 +106,39 @@ export interface ApiServerConfig {
   allowLegacyHeader?: boolean;
 }
 
+function parseAllowedOrigins(value = process.env.ALLOWED_ORIGINS): Set<string> {
+  return new Set(
+    (value || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  );
+}
+
+function createCorsHeaders(originHeader: string | undefined): Record<string, string> {
+  const baseHeaders: Record<string, string> = {
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-authorized-workspaces, x-request-id, x-correlation-id, traceparent, x-internal-secret, x-operational-secret, x-operational-boundary",
+    "Access-Control-Max-Age": "600",
+    "Vary": "Origin",
+  };
+  if (!originHeader) {
+    return baseHeaders;
+  }
+  if (!parseAllowedOrigins().has(originHeader)) {
+    return baseHeaders;
+  }
+  return {
+    ...baseHeaders,
+    "Access-Control-Allow-Origin": originHeader,
+    "Access-Control-Allow-Credentials": "true",
+  };
+}
+
 export class ApiServer {
   private readonly server: http.Server;
   public readonly port: number;
+  public readonly host: string;
   public readonly tracer: NativeTracer;
   public readonly metrics: NativeMetricsRegistry;
   public readonly logger: StructuredLogger;
@@ -138,11 +169,12 @@ export class ApiServer {
 
   constructor(config: ApiServerConfig = {}) {
     this.port = config.port ?? 3001;
+    this.host = config.host ?? process.env.HOST ?? "127.0.0.1";
     this.tracer = config.tracer ?? new NativeTracer({ serviceName: "combat-designer-api" });
     this.metrics = config.metrics ?? new NativeMetricsRegistry("combat-designer-api");
     this.logger = config.logger ?? new StructuredLogger({ silent: true });
     this.healthChecker = config.healthChecker ?? new HealthChecker();
-    this.operationalSecret = config.operationalSecret ?? "ops-internal-token-secret";
+    this.operationalSecret = config.operationalSecret ?? process.env.OPERATIONAL_SECRET ?? "";
     this.strictOperationalIsolation = config.strictOperationalIsolation ?? false;
     this.queryPort = config.queryPort;
     this.simulationPort = config.simulationPort;
@@ -725,7 +757,7 @@ export class ApiServer {
 
     // Extract W3C Trace Context
     const traceCtx = this.tracer.extractTraceContext(req.headers as Record<string, string | undefined>);
-    const requestId = (req.headers["x-request-id"] as string) || `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const requestId = (req.headers["x-request-id"] as string) || `req-${crypto.randomUUID()}`;
     const correlationId = (req.headers["x-correlation-id"] as string) || requestId;
 
     // Attach traceparent to response if trace context is present
@@ -739,14 +771,7 @@ export class ApiServer {
     span.setAttribute("http.request_id", requestId);
 
 
-    // CORS headers for cross-origin frontend support
-    const origin = (req.headers["origin"] as string) || "*";
-    const corsHeaders: Record<string, string> = {
-      "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-authorized-workspaces, x-request-id, x-correlation-id, traceparent, x-internal-secret, x-operational-secret, x-operational-boundary",
-      "Access-Control-Allow-Credentials": "true",
-    };
+    const corsHeaders = createCorsHeaders(req.headers["origin"] as string | undefined);
 
     if (typeof res.setHeader === "function") {
       for (const [headerName, headerValue] of Object.entries(corsHeaders)) {
@@ -1196,7 +1221,7 @@ export class ApiServer {
           try {
             const bodyStr = await this.readRequestBody(req);
             const body = JSON.parse(bodyStr || "{}");
-            const cid = `conv-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+            const cid = `conv-${crypto.randomUUID()}`;
             const now = new Date().toISOString();
             const conv = await this.chatRepo.createConversation({
               id: cid,
@@ -1597,7 +1622,7 @@ export class ApiServer {
         }
         const bodyText = await this.readRequestBody(req);
         const payload = JSON.parse(bodyText || "{}");
-        const id = `prop_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const id = `prop_${crypto.randomUUID()}`;
         const proposal: Proposal = {
           proposal_id: id,
           workspace_id: workspaceId,
@@ -1685,7 +1710,7 @@ export class ApiServer {
                 convId = conversations[0].id;
               } else {
                 const conv = await this.chatRepo.createConversation({
-                  id: `conv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                  id: `conv_${crypto.randomUUID()}`,
                   workspace_id: workspaceId,
                   user_id: userId,
                   title: "General Discussion",
@@ -1697,7 +1722,7 @@ export class ApiServer {
             }
             if (prompt && convId) {
               await this.chatRepo.saveMessage({
-                id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                id: `msg_${crypto.randomUUID()}`,
                 conversation_id: convId,
                 workspace_id: workspaceId,
                 role: "user",
@@ -1730,7 +1755,7 @@ export class ApiServer {
             const result = await this.chatOrchestrator.processMessage(contextEnvelope);
             if (this.chatRepo && convId && result.reply) {
               await this.chatRepo.saveMessage({
-                id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                id: `msg_${crypto.randomUUID()}`,
                 conversation_id: convId,
                 workspace_id: workspaceId,
                 role: "assistant",
@@ -1821,7 +1846,7 @@ export class ApiServer {
         if (this.chatRepo && convId && reply) {
           try {
             await this.chatRepo.saveMessage({
-              id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              id: `msg_${crypto.randomUUID()}`,
               conversation_id: convId,
               workspace_id: workspaceId,
               role: "assistant",
@@ -1856,7 +1881,7 @@ export class ApiServer {
 
   public listen(): Promise<void> {
     return new Promise((resolve) => {
-      this.server.listen(this.port, () => resolve());
+      this.server.listen(this.port, this.host, () => resolve());
     });
   }
 

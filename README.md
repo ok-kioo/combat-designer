@@ -163,20 +163,21 @@ NODE_ENV=development
 PORT=3001
 MCP_PORT=3002
 WEB_PORT=3000
+ALLOWED_ORIGINS=http://localhost:3000
 
-# PostgreSQL (opcional — sem ela, repositórios em memória são usados)
+# PostgreSQL
 POSTGRES_USER=combat_designer
-POSTGRES_PASSWORD=combat_designer_dev_secret
+POSTGRES_PASSWORD=
 POSTGRES_DB=combat_designer
-DATABASE_URL=postgres://combat_designer:combat_designer_dev_secret@localhost:5432/combat_designer
+DATABASE_URL=
 
-# Neo4j (opcional — habilita a projeção do grafo de conhecimento)
+# Neo4j
 NEO4J_VERSION=5.26.0-community
 NEO4J_URI=bolt://localhost:7687
 NEO4J_HTTP_URI=http://localhost:7474
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=combat_designer_dev_secret_change_me
-NEO4J_AUTH=neo4j/combat_designer_dev_secret_change_me
+NEO4J_PASSWORD=
+NEO4J_AUTH=
 
 # Combat Director / LLM (opcional — sem a chave, um LLM mock determinístico é usado)
 GEMINI_API_KEY=
@@ -185,6 +186,8 @@ GEMINI_MODEL=gemini-3.6-flash
 # Autenticação
 JWT_SECRET=
 ```
+
+Gere valores locais novos antes de subir o Compose, por exemplo com `openssl rand -base64 32`, e preencha `POSTGRES_PASSWORD`, `NEO4J_PASSWORD`, `NEO4J_AUTH` e `JWT_SECRET`. Qualquer segredo que já tenha sido versionado ou compartilhado deve ser rotacionado no ambiente real; este repositório não deve conter fallback funcional.
 
 ### 5. Execute o projeto
 

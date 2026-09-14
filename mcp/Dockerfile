@@ -10,7 +10,7 @@ COPY mcp/package*.json ./mcp/
 COPY frontend/package*.json ./frontend/
 
 # Install dependencies for MCP and backend dependency
-RUN npm install --workspace=@combat-designer/backend --workspace=@combat-designer/mcp
+RUN npm ci --ignore-scripts --workspace=@combat-designer/backend --workspace=@combat-designer/mcp
 
 # Copy backend and MCP sources
 COPY backend ./backend
@@ -23,8 +23,8 @@ RUN npm --workspace=@combat-designer/mcp run build
 
 ENV PORT=3002
 ENV NODE_ENV=production
-ENV API_URL=http://api:3001
 EXPOSE 3002
+USER node
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3002/health || exit 1

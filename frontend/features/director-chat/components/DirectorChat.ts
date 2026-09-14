@@ -97,7 +97,7 @@ export class DirectorChatController {
 
   public addUserMessage(content: string): ChatMessage {
     const message: ChatMessage = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `msg-${crypto.randomUUID()}`,
       role: "user",
       content,
       content_format: "markdown",
@@ -118,7 +118,7 @@ export class DirectorChatController {
     const cleanContent = this.sanitizeExecutionPhrases(content);
 
     const message: ChatMessage = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `msg-${crypto.randomUUID()}`,
       role: "assistant",
       content: cleanContent,
       content_format: "markdown",
@@ -269,7 +269,7 @@ export class DirectorChatController {
           .join("\n");
 
         const proposalId = m.proposedProposal
-          ? (m.proposedProposal.proposal_id || m.proposedProposal.proposal_id || m.proposedProposal.id || "")
+          ? (m.proposedProposal.proposal_id || m.proposedProposal.id || "")
           : "";
         const proposalHtml = m.proposedProposal
           ? `

@@ -24,6 +24,35 @@ import type {
 const PORT = parseInt(process.env.PORT || "3002", 10);
 const API_URL = process.env.API_URL || "http://localhost:3001";
 
+function parseAllowedOrigins(value = process.env.ALLOWED_ORIGINS): Set<string> {
+  return new Set(
+    (value || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  );
+}
+
+function createCorsHeaders(originHeader: string | undefined): Record<string, string> {
+  const baseHeaders: Record<string, string> = {
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-authorized-workspaces, x-request-id",
+    "Access-Control-Max-Age": "600",
+    "Vary": "Origin",
+  };
+  if (!originHeader) {
+    return baseHeaders;
+  }
+  if (!parseAllowedOrigins().has(originHeader)) {
+    return baseHeaders;
+  }
+  return {
+    ...baseHeaders,
+    "Access-Control-Allow-Origin": originHeader,
+    "Access-Control-Allow-Credentials": "true",
+  };
+}
+
 class InMemoryProposalRepo implements ProposalRepositoryPort {
   private store = new Map<string, Proposal>();
 
@@ -190,13 +219,7 @@ function createServer() {
     const pathname = url.pathname;
     const method = req.method || "GET";
 
-    const origin = (req.headers["origin"] as string) || "*";
-    const corsHeaders: Record<string, string> = {
-      "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-authorized-workspaces, x-request-id",
-      "Access-Control-Allow-Credentials": "true",
-    };
+    const corsHeaders = createCorsHeaders(req.headers["origin"] as string | undefined);
 
     if (method === "OPTIONS") {
       res.writeHead(204, corsHeaders);

@@ -26,7 +26,7 @@ export function GuestOnlyRoute() {
   const authenticatedOnEntry = useRef(status === 'authenticated');
   return authenticatedOnEntry.current ? <Navigate to="/workspaces" replace /> : <Outlet />;
 }
-function NotFound() { const navigate = useNavigate(); return <section className="state" data-page="not-found"><h1>404 — Página não encontrada</h1><p>Este endereço não corresponde a uma página do workbench.</p><div className="actions"><button onClick={() => navigate(-1)}>Voltar</button><Link to="/workspaces">Ir para Meus Projetos</Link></div></section>; }
+function NotFound() { const navigate = useNavigate(); return <section className="state" data-page="not-found"><h1>404 — Página não encontrada</h1><p>Este endereço não corresponde a uma página do workbench.</p><div className="actions"><button type="button" onClick={() => navigate(-1)}>Voltar</button><Link to="/workspaces">Ir para Meus Projetos</Link></div></section>; }
 /** The sole production route tree, also exercised by the served-app browser tests. */
 export function AppRoutes() {
   const { status, retry } = useAuth();

@@ -128,7 +128,7 @@ export class ChatOrchestrator {
   }
 
   async processMessage(envelope: ChatContextEnvelope): Promise<ChatOrchestratorResult> {
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const messageId = `msg_${crypto.randomUUID()}`;
     const conversationId = envelope.conversation_id || `conv_${envelope.workspace_id}_default`;
     const userId = envelope.user_id || "user_default";
     const prompt = envelope.user_prompt || "";

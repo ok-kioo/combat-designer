@@ -6,8 +6,35 @@ import { fileURLToPath } from 'node:url';
 // @ts-ignore Node runtime requires the source extension.
 import { applicationShell } from './shell.ts';
 
+const DEFAULT_BACKEND_HOSTS = new Set(['api', 'localhost', '127.0.0.1', '::1']);
+
+function parseAllowedHosts(value: string | undefined): Set<string> {
+  const hosts = new Set(DEFAULT_BACKEND_HOSTS);
+  for (const host of (value || '').split(',')) {
+    const trimmed = host.trim().toLowerCase();
+    if (trimmed) hosts.add(trimmed);
+  }
+  return hosts;
+}
+
+function resolveApiBaseUrl(rawUrl: string): URL {
+  const parsed = new URL(rawUrl);
+  const allowedHosts = parseAllowedHosts(process.env.BACKEND_ALLOWED_HOSTS);
+  const hostname = parsed.hostname.toLowerCase();
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('API_URL must use http or https');
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('API_URL must not include credentials');
+  }
+  if (!allowedHosts.has(hostname)) {
+    throw new Error(`API_URL host is not in BACKEND_ALLOWED_HOSTS: ${hostname}`);
+  }
+  return parsed;
+}
+
 export function createFrontendServer(options: { apiUrl?: string; publicApiUrl?: string } = {}) {
-  const apiUrl = options.apiUrl ?? process.env.API_URL ?? process.env.VITE_API_URL ?? 'http://localhost:3001';
+  const apiUrl = resolveApiBaseUrl(options.apiUrl ?? process.env.API_URL ?? process.env.VITE_API_URL ?? 'http://localhost:3001');
   const shell = applicationShell(options.publicApiUrl ?? process.env.PUBLIC_API_URL ?? '');
   const assets = new Map([
     ['/assets/app.js', ['app.js', 'text/javascript; charset=utf-8']],

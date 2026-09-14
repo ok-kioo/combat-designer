@@ -92,7 +92,7 @@ export class RequestAnalysisUseCase {
       });
     }
 
-    const analysisId = `an-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const analysisId = `an-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
 
     const analysis: Analysis = {

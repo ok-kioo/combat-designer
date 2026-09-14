@@ -72,7 +72,7 @@ export class SaveComboUseCase {
     }
 
     const now = new Date().toISOString();
-    const comboId = `combo-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const comboId = `combo-${crypto.randomUUID()}`;
 
     const newCombo: Combo = {
       id: comboId,
