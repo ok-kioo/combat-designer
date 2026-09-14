@@ -65,8 +65,7 @@ Explicando de forma simples:
 ### Screenshots
 
 <img width="1920" height="910" alt="image" src="https://github.com/user-attachments/assets/300c9509-a9a4-4ff5-8901-0f676cdc0b71" />
-<img width="1920" height="910" alt="image" src="https://github.com/user-attachments/assets/c8a3b82c-e437-4ae9-b3e3-2a9f8c553e08" />
-
+<img width="1627" height="887" alt="image" src="https://github.com/user-attachments/assets/efdf759d-2d49-4e57-ae4a-f0a620d0b54e" />
 
 ---
 
