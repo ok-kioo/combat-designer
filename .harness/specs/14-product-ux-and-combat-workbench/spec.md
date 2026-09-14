@@ -200,3 +200,15 @@ A camada de dados continua no `ApiClient`; não existe router próprio nem uma s
 - `14.EDU.1`: O Onboarding interativo é exibido automaticamente apenas no primeiro uso (`onboarding_version`, `completed_at`).
 - `14.EDU.2`: A aba permanente **Ajuda** mantém documentação completa acessível e botão para reiniciar o tutorial a qualquer momento.
 - `14.EDU.3`: A aba **Importar Dados** é dedicada à ingestão de arquivos JSON e scripts C# da Unity, exibindo resumo em linguagem de produto (personagens detectados, golpes, quarentena) sem vazar termos de infraestrutura interna.
+## Combat Director Markdown presentation
+
+- UX.CHAT.MD.1: Assistant messages MUST render constrained, sanitized Markdown through the canonical React message component.
+- UX.CHAT.MD.2: User messages MUST remain plain text, including literal Markdown tokens.
+- UX.CHAT.MD.3: Raw HTML, scripts, event handlers and unsafe URLs MUST NOT execute.
+- UX.CHAT.MD.4: Support paragraphs, semantic compact headings, emphasis, nested lists, horizontal rules, links, inline code and fenced code preserving whitespace.
+- UX.CHAT.MD.5: GFM tables MUST be semantic and horizontally scroll within the message without expanding the page.
+- UX.CHAT.MD.6: Persist the original Markdown string; the backend MUST NOT convert it to HTML.
+- UX.CHAT.MD.7: Preserve bounded history, visible composer and autoscroll only near the end.
+- UX.CHAT.MD.8: Styles MUST be legible in supported themes with visible keyboard focus and distinguishable links.
+- UX.CHAT.MD.9: Tests MUST exercise the real assistant component and the served Combat Director, including received and reloaded messages and partial Markdown.
+- UX.CHAT.MD.10: Adversarial Markdown/HTML MUST NOT create executable DOM content. External links use noopener noreferrer; recognizable internal links use the application router.

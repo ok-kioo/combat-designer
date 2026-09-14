@@ -105,8 +105,8 @@ describe("SPEC 13 — Director Chat UI Suite (13.UI.1 – 13.UI.13)", () => {
     const html = renderer.render(markdown);
 
     expect(html).toContain("<code>atk_heavy_punch</code>");
-    expect(html).toContain("<pre><code class=\"language-json\">");
-    expect(html).toContain('"damage": 85');
+    expect(html).toMatch(/<pre[^>]*><code class="language-json">/);
+    expect(html).toContain('&quot;damage&quot;: 85');
   });
 
   // 13.UI.7 — Tables
@@ -135,13 +135,13 @@ describe("SPEC 13 — Director Chat UI Suite (13.UI.1 – 13.UI.13)", () => {
     // Unclosed code block should be previewable without crashing or corrupting DOM
     const preview = buffer.getRendered();
     expect(preview).toContain("<h2>Análise em progresso</h2>");
-    expect(preview).toContain("<pre><code");
-    expect(preview).toContain('"startup": 4');
+    expect(preview).toMatch(/<pre[^>]*><code/);
+    expect(preview).toContain('&quot;startup&quot;: 4');
 
     // Complete the block
     buffer.appendChunk("\n}\n```");
     const complete = buffer.complete();
-    expect(complete).toContain("<pre><code class=\"language-json\">");
+    expect(complete).toMatch(/<pre[^>]*><code class="language-json">/);
   });
 
   // 13.UI.9 — XSS sanitization

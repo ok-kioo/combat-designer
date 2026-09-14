@@ -241,9 +241,9 @@ export class DirectorChatController {
     const messagesHtml = model.messages
       .map((m) => {
         const renderedContent =
-          m.content_format === "markdown" || m.role === "assistant"
+          m.role === "assistant"
             ? this.markdownRenderer.render(m.content)
-            : m.content;
+            : m.content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
         const activitiesHtml = (m.activities || [])
           .map(
