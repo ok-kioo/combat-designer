@@ -337,11 +337,11 @@ describe("SPEC 08 — Functional Tests (08.T.1 – 08.T.15)", () => {
     expect(resultAlpha.attack_id).toBe("shared_attack_id");
   });
 
-  it("08.T.11: Changeset proposal lifecycle scoped strictly to active workspace", () => {
+  it("08.T.11: Proposal proposal lifecycle scoped strictly to active workspace", () => {
     const principalAlpha: Principal = {
       principal_id: "designer-alpha",
       principal_type: "human",
-      capabilities: ["combat:read", "changeset:propose"],
+      capabilities: ["combat:read", "proposal:propose"],
       authorized_workspaces: ["ws-alpha"],
     };
 

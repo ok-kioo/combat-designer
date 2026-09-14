@@ -14,7 +14,6 @@ import {
   sanitizeMetricLabels,
   FORBIDDEN_METRIC_LABELS,
   redactSensitiveData,
-  GATE_METRICS,
   API_METRICS,
 } from "@combat-designer/backend";
 import { ApiServer } from "../../../src/infrastructure/http/server.js";
@@ -42,7 +41,7 @@ describe("SPEC 07 — Security Tests (07.SEC.1 – 07.SEC.16)", () => {
       recovery_frames: 22,
     });
 
-    adapter.recordMetric(GATE_METRICS.RUN_COUNT, 1);
+    adapter.recordMetric("combat_analysis_count", 1);
     adapter.emitLog({
       event_name: "inspect_attack",
       details: canonicalAttack as unknown as Record<string, unknown>,
@@ -149,62 +148,62 @@ describe("SPEC 07 — Security Tests (07.SEC.1 – 07.SEC.16)", () => {
     };
     // Correlation and trace IDs must remain distinct from authenticated principal
     expect(traceCtx.trace_id).not.toBe("human_lead");
-    expect(traceCtx.span_id).not.toBe("changeset:apply");
+    expect(traceCtx.span_id).not.toBe("proposal:apply");
   });
 
-  it("07.SEC.7: Observability cannot approve ChangeSet", () => {
-    const changeset = {
-      changeset_id: "cs-sec-01",
-      status: "proposed" as const,
+  it("07.SEC.7: Observability cannot approve Proposal", () => {
+    const proposal = {
+      proposal_id: "prop-sec-01",
+      status: "ACTIVE" as const,
       approved_by: null as string | null,
     };
 
-    // Telemetry records proposal
+    // Telemetry records proposal creation only.
     adapter.emitLog({
-      event_name: "changeset_proposed",
-      changeset_id: changeset.changeset_id,
+      event_name: "proposal_created",
+      proposal_id: proposal.proposal_id,
     });
-    adapter.recordMetric("changeset_proposed_count", 1);
+    adapter.recordMetric("proposal_created_count", 1);
 
-    // ChangeSet status is strictly unaffected
-    expect(changeset.status).toBe("proposed");
-    expect(changeset.approved_by).toBeNull();
+    // Proposal status is strictly unaffected.
+    expect(proposal.status).toBe("ACTIVE");
+    expect(proposal.approved_by).toBeNull();
   });
 
-  it("07.SEC.8: Observability cannot apply ChangeSet", () => {
-    const changeset = {
-      changeset_id: "cs-sec-02",
-      status: "approved" as const,
-      applied_at: null as string | null,
+  it("07.SEC.8: Observability cannot archive Proposal", () => {
+    const proposal = {
+      proposal_id: "prop-sec-02",
+      status: "ACTIVE" as const,
+      archived_at: null as string | null,
     };
 
-    adapter.recordMetric("changeset_applied_count", 1);
+    adapter.recordMetric("proposal_archived_count", 1);
     adapter.emitLog({
-      event_name: "changeset_telemetry_audit",
-      changeset_id: changeset.changeset_id,
+      event_name: "proposal_telemetry_audit",
+      proposal_id: proposal.proposal_id,
     });
 
-    // Observability recording cannot set applied_at or change canonical status
-    expect(changeset.applied_at).toBeNull();
-    expect(changeset.status).toBe("approved");
+    // Observability recording cannot set archived_at or change canonical status.
+    expect(proposal.archived_at).toBeNull();
+    expect(proposal.status).toBe("ACTIVE");
   });
 
-  it("07.SEC.9: Observability cannot alter GateResult", () => {
-    const gateResult = Object.freeze({
-      gate_run_id: "gr-sec-01",
-      verdict: "FAIL" as const,
-      violations_count: 2,
+  it("07.SEC.9: Observability cannot alter AnalysisResult", () => {
+    const analysisResult = Object.freeze({
+      analysis_id: "an-sec-01",
+      status: "COMPLETED_WITH_FINDINGS" as const,
+      findings_count: 2,
     });
 
-    adapter.recordMetric(GATE_METRICS.RUN_COUNT, 1, { verdict: "FAIL" });
+    adapter.recordMetric("combat_analysis_count", 1, { status: "COMPLETED_WITH_FINDINGS" });
     adapter.emitLog({
-      event_name: "gate_completed",
-      details: { verdict: gateResult.verdict },
+      event_name: "analysis_completed",
+      details: { status: analysisResult.status },
     });
 
-    // Verdict strictly remains FAIL
-    expect(gateResult.verdict).toBe("FAIL");
-    expect(gateResult.verdict as string).not.toBe("PASS");
+    // Analysis status strictly remains unchanged.
+    expect(analysisResult.status).toBe("COMPLETED_WITH_FINDINGS");
+    expect(analysisResult.status as string).not.toBe("COMPLETED_CLEAN");
   });
 
   it("07.SEC.10: Observability cannot alter SimulationResult", () => {
@@ -422,7 +421,7 @@ describe("SPEC 07 — Security Tests (07.SEC.1 – 07.SEC.16)", () => {
     const trustedPrincipal = {
       principal_id: "human_reviewer_01",
       principal_type: "human",
-      capabilities: ["changeset:approve"],
+      capabilities: ["proposal:approve"],
     };
 
     // Adversarial incoming header trying to inject an override

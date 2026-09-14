@@ -86,7 +86,7 @@ proptest! {
         let mut hit_exhaustion = false;
 
         for _ in 0..steps {
-            if let Err(_) = tracker.track_step() {
+            if tracker.track_step().is_err() {
                 hit_exhaustion = true;
                 break;
             }
@@ -123,12 +123,11 @@ proptest! {
         let profile = VerificationProfile::strict();
 
         // Must never panic on arbitrary u32 damage inputs
-        let (dps_check, burst_check) = rules::check_dps_and_burst("prop_test", &sim, &profile, &mut tracker);
+        let (_dps_check, burst_check) = rules::check_dps_and_burst("prop_test", &sim, &profile, &mut tracker);
 
         if damage as u64 > profile.max_burst_damage {
             prop_assert_eq!(burst_check.status, CheckStatus::Fail);
         }
-        prop_assert!(dps_check.observed <= u64::MAX);
     }
 
     #[test]

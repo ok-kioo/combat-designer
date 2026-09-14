@@ -6,7 +6,7 @@
 
 O **SPEC 11** implementa a integração real com a **Gemini API** no backend do Combat Designer, substituindo o mock determinístico da rota `POST /api/workspaces/:workspace_id/chat` por chamadas reais à LLM com **function calling**.
 
-O sistema dispõe de motores de domínio determinísticos (Rust crates), pipeline de ingestão segura (SPECs 02, 08 e 09), Knowledge Graph (SPEC 03), simulador determinístico (SPEC 04), Mechanical Gate (SPEC 05), MCP gateway/server (SPEC 06), observabilidade (SPEC 07), frontend completo (SPEC 10) — mas a orquestração de chat operava via switch determinístico por keyword. O SPEC 11 transforma o chat em um canal de orquestração LLM real onde o modelo decide quais ferramentas de combate chamar.
+O sistema dispõe de motores de domínio determinísticos (Rust crates), pipeline de ingestão segura (SPECs 02, 08 e 09), Knowledge Graph (SPEC 03), simulador determinístico (SPEC 04), Combat Analysis (SPEC 05), MCP gateway/server (SPEC 06), observabilidade (SPEC 07), frontend completo (SPEC 10) — mas a orquestração de chat operava via switch determinístico por keyword. O SPEC 11 transforma o chat em um canal de orquestração LLM real onde o modelo decide quais ferramentas de combate chamar.
 
 ---
 
@@ -123,7 +123,7 @@ O system prompt é construído dinamicamente para cada turno, incluindo:
 |---|---|---|---|
 | 11.T.1 | Integração | Chat com mock LlmProvider retorna resposta textual | `reply` presente, `tool_calls` vazio |
 | 11.T.2 | Integração | Chat com function call `combat_search` | Loop executa search, retorna resultado |
-| 11.T.3 | Integração | Chat com `combat_propose_change` cria changeset | Changeset salvo, retornado na resposta |
+| 11.T.3 | Integração | Chat com `combat_create_proposal` cria proposta consultiva | Proposta salva, retornada na resposta |
 | 11.T.4 | Integração | Loop respeita MAX_TOOL_CALL_ROUNDS | Após 5 rounds, para com aviso |
 | 11.T.5 | Integração | Fallback ao mock sem LlmProvider | Backward compat com SPEC 10 |
 | 11.T.6 | Integração | System prompt contém context do envelope | Mock verifica conteúdo do prompt |

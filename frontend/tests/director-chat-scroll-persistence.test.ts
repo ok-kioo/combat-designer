@@ -77,11 +77,11 @@ describe("SPEC 14 — Director Chat Viewport Bounded, Scroll & Persistence (UX.C
     controller.addAssistantResponse(
       "Recomendação: reduza a janela de cancelamento para prevenir loop infinito.",
       [],
-      { changeset_id: "cs-123", target_revision: "rev-2" }
+      { proposal_id: "cs-123", target_revision: "rev-2" }
     );
 
     const model = controller.renderModel();
     expect(model.messages[1].content).toContain("Recomendação");
-    expect(model.messages[1].proposedChangeset?.changeset_id).toBe("cs-123");
+    expect(model.messages[1].proposedProposal?.proposal_id).toBe("cs-123");
   });
 });

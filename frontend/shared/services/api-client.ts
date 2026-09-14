@@ -254,7 +254,7 @@ export class ApiClient {
     return res.json();
   }
 
-  public async getProposals(workspaceId: string): Promise<{ count: number; proposals: any[]; changesets: any[] }> {
+  public async getProposals(workspaceId: string): Promise<{ count: number; proposals: any[] }> {
     const res = await fetch(`${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/proposals`, {
       method: "GET",
       headers: this.getHeaders(workspaceId),
@@ -263,7 +263,7 @@ export class ApiClient {
     return res.json();
   }
 
-  public async getProposal(workspaceId: string, proposalId: string): Promise<{ proposal: any; changeset: any }> {
+  public async getProposal(workspaceId: string, proposalId: string): Promise<{ proposal: any }> {
     const res = await fetch(
       `${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/proposals/${encodeURIComponent(proposalId)}`,
       {
@@ -300,21 +300,8 @@ export class ApiClient {
     return data;
   }
 
-  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility aliases
-  public async getChangeSets(workspaceId: string): Promise<{ count: number; changesets: any[]; proposals: any[] }> {
-    return this.getProposals(workspaceId);
-  }
-
-  public async getChangeSet(workspaceId: string, changesetId: string): Promise<{ changeset: any; proposal: any }> {
-    return this.getProposal(workspaceId, changesetId);
-  }
-
-  public async proposeChangeSet(workspaceId: string, proposal: any): Promise<any> {
+  public async createProposal(workspaceId: string, proposal: any): Promise<any> {
     return this.proposeAdjustment(workspaceId, proposal);
-  }
-
-  public async withdrawChangeSet(workspaceId: string, changesetId: string, reason?: string): Promise<any> {
-    return this.withdrawProposal(workspaceId, changesetId, reason);
   }
 
   public async sendChatMessage(
@@ -323,7 +310,7 @@ export class ApiClient {
     context?: {
       snapshot_hash?: string;
       selected_attack_ids?: string[];
-      active_changeset_id?: string;
+      active_proposal_id?: string;
     }
   ): Promise<any> {
     const res = await fetch(`${this.baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/chat`, {

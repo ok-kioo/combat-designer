@@ -397,11 +397,11 @@ describe("SPEC 09 — Ingestion Security and Execution Limits (09.T.1 – 09.T.1
     expect(simulationResult.events.length).toBe(1);
   });
 
-  it("09.T.9: Mechanical Gate reports BUDGET_EXCEEDED verdict (distinct from PASS, FAIL, ERROR)", () => {
-    const gateResult = {
-      gate_run_id: "gate_run_fuel_001",
-      verdict: "BUDGET_EXCEEDED",
-      violations: ["EXECUTION_BUDGET"],
+  it("09.T.9: Combat analysis reports BUDGET_EXCEEDED status distinctly", () => {
+    const analysisResult = {
+      analysis_id: "an_budget_001",
+      status: "BUDGET_EXCEEDED",
+      findings: ["EXECUTION_BUDGET"],
       checks: [
         {
           rule_id: "VERIFICATION_BUDGET",
@@ -411,20 +411,20 @@ describe("SPEC 09 — Ingestion Security and Execution Limits (09.T.1 – 09.T.1
       ],
     };
 
-    expect(gateResult.verdict).toBe("BUDGET_EXCEEDED");
-    expect(gateResult.verdict).not.toBe("PASS");
-    expect(gateResult.verdict).not.toBe("FAIL");
-    expect(gateResult.verdict).not.toBe("ERROR");
+    expect(analysisResult.status).toBe("BUDGET_EXCEEDED");
+    expect(analysisResult.status).not.toBe("COMPLETED_CLEAN");
+    expect(analysisResult.status).not.toBe("COMPLETED_WITH_FINDINGS");
+    expect(analysisResult.status).not.toBe("ERROR");
   });
 
-  it("09.T.10: GateResult with BUDGET_EXCEEDED provides explainable guidance for designers and LLM", () => {
-    const isBudgetExceeded = (verdict: string) => verdict === "BUDGET_EXCEEDED";
-    const formatExplanation = (gateRunId: string, verdict: string) =>
-      isBudgetExceeded(verdict)
+  it("09.T.10: AnalysisResult with BUDGET_EXCEEDED provides explainable guidance for designers and LLM", () => {
+    const isBudgetExceeded = (status: string) => status === "BUDGET_EXCEEDED";
+    const formatExplanation = (analysisId: string, status: string) =>
+      isBudgetExceeded(status)
         ? "The search space is too broad for the allocated execution budget. Please refine search constraints, narrow parameters, or increase the computational budget."
-        : `Mechanical Gate run '${gateRunId}' evaluated safety properties deterministic under strict profile.`;
+        : `Combat analysis '${analysisId}' completed under the selected diagnostic profile.`;
 
-    const explanation = formatExplanation("gate_run_budget_exceeded_123", "BUDGET_EXCEEDED");
+    const explanation = formatExplanation("an_budget_exceeded_123", "BUDGET_EXCEEDED");
     expect(explanation).toContain("The search space is too broad for the allocated execution budget");
   });
 

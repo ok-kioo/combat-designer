@@ -75,14 +75,14 @@ describe("SPEC 06 — LLM Orchestration Tests (06.T.13 - 06.T.20)", () => {
     const intent = {
       type: "approve" as const,
       workspace_id: "ws-alpha",
-      changeset_id: "cs-123",
+      proposal_id: "cs-123",
       human_approver_id: "llm_director",
       decision: "approve" as const,
     };
 
     await expect(
       env.server.orchestrator.executeIntent(env.llmDirector, intent)
-    ).rejects.toThrow(/Fabricated approval rejected: LLM cannot approve changesets/);
+    ).rejects.toThrow(/Fabricated approval rejected: LLM cannot approve proposals/);
   });
 
   it("06.T.18: analysis status is preserved exactly", async () => {

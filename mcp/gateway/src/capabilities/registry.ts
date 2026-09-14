@@ -22,7 +22,6 @@ export interface ToolRegistration {
   capability_required: Capability;
   workspace_required: boolean;
   mutability: Mutability;
-  gate_required: boolean;
   risk_level: RiskLevel;
   input_schema: z.ZodTypeAny;
   output_classification: ResponseClassification;
@@ -41,7 +40,6 @@ export class ToolRegistry {
       capability_required: "combat:query",
       workspace_required: true,
       mutability: "READ",
-      gate_required: false,
       risk_level: "low",
       input_schema: CombatSearchInputSchema,
       output_classification: "FACT",
@@ -52,7 +50,6 @@ export class ToolRegistry {
       capability_required: "combat:read",
       workspace_required: true,
       mutability: "READ",
-      gate_required: false,
       risk_level: "low",
       input_schema: CombatGetAttackInputSchema,
       output_classification: "FACT",
@@ -63,7 +60,6 @@ export class ToolRegistry {
       capability_required: "combat:read",
       workspace_required: true,
       mutability: "READ",
-      gate_required: false,
       risk_level: "low",
       input_schema: ListScenariosInputSchema,
       output_classification: "FACT",
@@ -74,7 +70,6 @@ export class ToolRegistry {
       capability_required: "combat:query",
       workspace_required: true,
       mutability: "READ",
-      gate_required: false,
       risk_level: "low",
       input_schema: ImpactAnalysisInputSchema,
       output_classification: "FACT",
@@ -85,7 +80,6 @@ export class ToolRegistry {
       capability_required: "combat:simulate",
       workspace_required: true,
       mutability: "READ_SIMULATION",
-      gate_required: false,
       risk_level: "medium",
       input_schema: CombatSimulateInputSchema,
       output_classification: "SIMULATION_RESULT",
@@ -96,40 +90,36 @@ export class ToolRegistry {
       capability_required: "combat:analyze",
       workspace_required: true,
       mutability: "READ_ANALYSIS",
-      gate_required: false,
       risk_level: "medium",
       input_schema: CombatAnalyzeInputSchema,
       output_classification: "SIMULATION_RESULT",
     });
 
     this.register({
-      tool_id: "combat_propose_change",
+      tool_id: "combat_create_proposal",
       capability_required: "combat:propose",
       workspace_required: true,
       mutability: "PROPOSAL",
-      gate_required: false,
       risk_level: "medium",
       input_schema: CombatProposeChangeInputSchema,
       output_classification: "SUGGESTION",
     });
 
     this.register({
-      tool_id: "combat_get_change",
+      tool_id: "combat_get_proposal",
       capability_required: "combat:read",
       workspace_required: true,
       mutability: "READ",
-      gate_required: false,
       risk_level: "low",
       input_schema: CombatGetChangeInputSchema,
       output_classification: "FACT",
     });
 
     this.register({
-      tool_id: "combat_withdraw_change",
-      capability_required: "changeset:withdraw",
+      tool_id: "combat_withdraw_proposal",
+      capability_required: "proposal:withdraw",
       workspace_required: true,
       mutability: "PROPOSAL",
-      gate_required: false,
       risk_level: "medium",
       input_schema: CombatWithdrawChangeInputSchema,
       output_classification: "SUGGESTION",

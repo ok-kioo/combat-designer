@@ -1,5 +1,11 @@
 import { renameWorkspace } from '../../modules/workspace/application/rename-workspace.js';
 import { createCharacter } from '../../modules/combat/service/create-character.js';
+import {
+  DEFAULT_DEV_EMAIL,
+  DEFAULT_DEV_PASSWORD_HASH,
+  DEFAULT_DEV_USER_ID,
+  DEFAULT_DEV_USERNAME,
+} from "../provider/auth/in-memory-auth-repository.js";
 import http from "node:http";
 import {
   API_METRICS,
@@ -20,12 +26,11 @@ import type {
   SimulationPort,
   CombatAnalysisPort,
 } from "../../modules/combat/domain/repository/index.js";
-import type { ChangeSetRepositoryPort } from "../../modules/changeset/domain/repository/index.js";
-import type { ChangeSetProposal } from "../../modules/changeset/domain/entity/index.js";
+import type { ProposalRepositoryPort } from "../../modules/proposal/domain/repository/index.js";
+import type { Proposal } from "../../modules/proposal/domain/entity/index.js";
 import type { LlmProvider } from "../../modules/llm/domain/port/llm-provider.js";
 import { ChatOrchestrator } from "../../modules/llm/service/chat-orchestrator.js";
 import type { ChatContextEnvelope } from "../../modules/llm/service/chat-orchestrator.js";
-import { renderWorkbenchHtml } from "./workbench-html.js";
 import {
   AuthService,
   AuthMiddleware,
@@ -48,6 +53,15 @@ import {
   GetWorkspaceOverviewUseCase,
   SaveComboUseCase,
   RequestAnalysisUseCase,
+  createPostgresDatabaseFromEnv,
+  type PostgresDatabase,
+  PostgresUserRepository,
+  PostgresRefreshTokenRepository,
+  PostgresWorkspaceRepository,
+  PostgresChatRepository,
+  PostgresCharacterRepository,
+  PostgresComboRepository,
+  PostgresAnalysisRepository,
 } from "../../index.js";
 
 export interface WorkspaceState {
@@ -78,7 +92,7 @@ export interface ApiServerConfig {
   queryPort?: CombatQueryPort;
   simulationPort?: SimulationPort;
   analysisPort?: CombatAnalysisPort;
-  changesetRepo?: ChangeSetRepositoryPort;
+  proposalRepo?: ProposalRepositoryPort;
   llmProvider?: LlmProvider;
   authService?: AuthService;
   workspaceRepo?: WorkspaceRepositoryPort;
@@ -87,6 +101,7 @@ export interface ApiServerConfig {
   characterRepo?: CharacterRepositoryPort;
   comboRepo?: ComboRepositoryPort;
   analysisRepo?: AnalysisRepositoryPort;
+  postgresDatabase?: PostgresDatabase | null;
   allowLegacyHeader?: boolean;
 }
 
@@ -102,7 +117,7 @@ export class ApiServer {
   public readonly queryPort?: CombatQueryPort;
   public readonly simulationPort?: SimulationPort;
   public readonly analysisPort?: CombatAnalysisPort;
-  public readonly changesetRepo?: ChangeSetRepositoryPort;
+  public readonly proposalRepo?: ProposalRepositoryPort;
   public readonly chatOrchestrator?: ChatOrchestrator;
   public readonly authService: AuthService;
   public readonly authMiddleware: AuthMiddleware;
@@ -113,12 +128,13 @@ export class ApiServer {
   public readonly characterRepo: CharacterRepositoryPort;
   public readonly comboRepo: ComboRepositoryPort;
   public readonly analysisRepo: AnalysisRepositoryPort;
+  public readonly postgresDatabase: PostgresDatabase | null;
   public readonly getOverviewUseCase: GetWorkspaceOverviewUseCase;
   public readonly saveComboUseCase: SaveComboUseCase;
   public readonly requestAnalysisUseCase: RequestAnalysisUseCase;
   public readonly allowLegacyHeader: boolean;
   private readonly workspaceStates = new Map<string, WorkspaceState>();
-  private readonly changesetStore = new Map<string, Map<string, ChangeSetProposal>>();
+  private readonly proposalStore = new Map<string, Map<string, Proposal>>();
 
   constructor(config: ApiServerConfig = {}) {
     this.port = config.port ?? 3001;
@@ -131,17 +147,40 @@ export class ApiServer {
     this.queryPort = config.queryPort;
     this.simulationPort = config.simulationPort;
     this.analysisPort = config.analysisPort;
-    this.changesetRepo = config.changesetRepo;
+    this.proposalRepo = config.proposalRepo;
     this.allowLegacyHeader = config.allowLegacyHeader ?? true;
+    this.postgresDatabase = config.postgresDatabase === undefined
+      ? createPostgresDatabaseFromEnv()
+      : config.postgresDatabase;
 
-    this.workspaceRepo = config.workspaceRepo ?? new InMemoryWorkspaceRepository();
+    this.workspaceRepo =
+      config.workspaceRepo ??
+      (this.postgresDatabase
+        ? new PostgresWorkspaceRepository(this.postgresDatabase)
+        : new InMemoryWorkspaceRepository());
     this.workspaceAuthorizationPort =
       config.workspaceAuthorizationPort ?? new WorkspaceAuthorizationService(this.workspaceRepo);
 
-    this.chatRepo = config.chatRepo ?? new SqliteChatRepository(process.env.CHAT_DB_PATH || ":memory:");
-    this.characterRepo = config.characterRepo ?? new InMemoryCharacterRepository();
-    this.comboRepo = config.comboRepo ?? new InMemoryComboRepository();
-    this.analysisRepo = config.analysisRepo ?? new InMemoryAnalysisRepository();
+    this.chatRepo =
+      config.chatRepo ??
+      (this.postgresDatabase
+        ? new PostgresChatRepository(this.postgresDatabase)
+        : new SqliteChatRepository(process.env.CHAT_DB_PATH || ":memory:"));
+    this.characterRepo =
+      config.characterRepo ??
+      (this.postgresDatabase
+        ? new PostgresCharacterRepository(this.postgresDatabase)
+        : new InMemoryCharacterRepository());
+    this.comboRepo =
+      config.comboRepo ??
+      (this.postgresDatabase
+        ? new PostgresComboRepository(this.postgresDatabase)
+        : new InMemoryComboRepository());
+    this.analysisRepo =
+      config.analysisRepo ??
+      (this.postgresDatabase
+        ? new PostgresAnalysisRepository(this.postgresDatabase)
+        : new InMemoryAnalysisRepository());
 
     this.getOverviewUseCase = new GetWorkspaceOverviewUseCase({
       workspaceRepo: this.workspaceRepo,
@@ -175,8 +214,12 @@ export class ApiServer {
     if (config.authService) {
       this.authService = config.authService;
     } else {
-      const userRepo = new InMemoryUserRepository();
-      const tokenRepo = new InMemoryRefreshTokenRepository();
+      const userRepo = this.postgresDatabase
+        ? new PostgresUserRepository(this.postgresDatabase)
+        : new InMemoryUserRepository();
+      const tokenRepo = this.postgresDatabase
+        ? new PostgresRefreshTokenRepository(this.postgresDatabase)
+        : new InMemoryRefreshTokenRepository();
       this.authService = new AuthService(userRepo, tokenRepo, this.workspaceRepo);
     }
     this.authMiddleware = new AuthMiddleware(this.authService, this.workspaceAuthorizationPort);
@@ -260,7 +303,7 @@ export class ApiServer {
         queryPort: fallbackQueryPort,
         simulationPort: this.simulationPort,
         analysisPort: this.analysisPort,
-        saveChangeset: (proposal) => this.saveChangeset(proposal),
+        saveProposal: (proposal) => this.saveProposal(proposal),
         getWorkspaceRevision: (wsId) => this.getWorkspaceState(wsId).latest_revision,
       });
     }
@@ -302,34 +345,69 @@ export class ApiServer {
     });
   }
 
-  private getChangesetStore(workspaceId: string): Map<string, ChangeSetProposal> {
-    let store = this.changesetStore.get(workspaceId);
+  private getProposalStore(workspaceId: string): Map<string, Proposal> {
+    let store = this.proposalStore.get(workspaceId);
     if (!store) {
-      store = new Map<string, ChangeSetProposal>();
-      this.changesetStore.set(workspaceId, store);
+      store = new Map<string, Proposal>();
+      this.proposalStore.set(workspaceId, store);
     }
     return store;
   }
 
-  public saveChangeset(proposal: ChangeSetProposal): void {
-    const store = this.getChangesetStore(proposal.workspace_id);
-    store.set(proposal.changeset_id, proposal);
-    if (this.changesetRepo) {
-      void this.changesetRepo.save(proposal);
+  public saveProposal(proposal: Proposal): void {
+    const store = this.getProposalStore(proposal.workspace_id);
+    store.set(proposal.proposal_id, proposal);
+    if (this.proposalRepo) {
+      void this.proposalRepo.save(proposal);
     }
   }
 
-  public getChangesetById(workspaceId: string, changesetId: string): ChangeSetProposal | null {
-    const store = this.getChangesetStore(workspaceId);
-    return store.get(changesetId) ?? null;
+  public getProposalById(workspaceId: string, proposalId: string): Proposal | null {
+    const store = this.getProposalStore(workspaceId);
+    return store.get(proposalId) ?? null;
   }
 
-  public getChangesetsForWorkspace(workspaceId: string): ChangeSetProposal[] {
-    const store = this.getChangesetStore(workspaceId);
+  public getProposalsForWorkspace(workspaceId: string): Proposal[] {
+    const store = this.getProposalStore(workspaceId);
     return Array.from(store.values());
   }
 
+  public async ensureSeedWorkspace(workspaceId: string): Promise<void> {
+    const existing = await this.workspaceRepo.findById(workspaceId);
+    if (existing) return;
+
+    const now = new Date().toISOString();
+    if (this.postgresDatabase) {
+      await this.postgresDatabase.query(
+        `INSERT INTO users (id, username, password_hash, display_name, email, status, created_at, updated_at, last_login_at)
+         VALUES ($1, $2, $3, $4, $5, 'active', $6, $6, $6)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          DEFAULT_DEV_USER_ID,
+          DEFAULT_DEV_USERNAME,
+          DEFAULT_DEV_PASSWORD_HASH,
+          "Developer",
+          DEFAULT_DEV_EMAIL,
+          now,
+        ]
+      );
+    }
+
+    await this.workspaceRepo.save({
+      id: workspaceId,
+      owner_user_id: DEFAULT_DEV_USER_ID,
+      name: "Demo Workspace",
+      description: "Seeded workspace for local exploration and smoke tests.",
+      engine: "Unity",
+      engine_version: "2022.3",
+      status: "active",
+      created_at: now,
+      updated_at: now,
+    });
+  }
+
   public async seedDemoAttacks(workspaceId: string): Promise<void> {
+    await this.ensureSeedWorkspace(workspaceId);
     const state = this.getWorkspaceState(workspaceId);
     const snapshotHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -487,13 +565,13 @@ export class ApiServer {
 
     state.latest_envelope = sampleEnvelope;
 
-    const sampleChangeset: ChangeSetProposal = {
-      changeset_id: `cs_demo_${workspaceId.replace(/[^a-zA-Z0-9]/g, "_")}`,
+    const sampleProposal: Proposal = {
+      proposal_id: `prop_demo_${workspaceId.replace(/[^a-zA-Z0-9]/g, "_")}`,
       workspace_id: workspaceId,
       base_revision: "rev-1.0.0",
       target_revision: "rev-1.0.1",
       proposed_by: "combat_director_llm",
-      status: "proposed",
+      status: "ACTIVE",
       mutations: [
         {
           type: "attack_damage",
@@ -505,7 +583,7 @@ export class ApiServer {
       ],
       created_at: new Date().toISOString(),
     };
-    this.saveChangeset(sampleChangeset);
+    this.saveProposal(sampleProposal);
     await this.characterRepo.save({ id: "char_default", workspace_id: workspaceId, name: "Demo Fighter", display_name: "Demo Fighter", metadata: {}, provenance: { imported_at: new Date().toISOString(), importer: "demo" } });
   }
 
@@ -733,10 +811,13 @@ export class ApiServer {
     };
 
     try {
-      // Web Workbench UI: GET / and GET /app
+      // Backend is API-only. Product UI is served by the React frontend.
       if (method === "GET" && (pathname === "/" || pathname === "/app")) {
-        const html = renderWorkbenchHtml("ws-default");
-        return finish(200, html, "text/html; charset=utf-8");
+        return finish(200, JSON.stringify({
+          service: "combat-designer-api",
+          ui: "frontend-react",
+          message: "Use the React frontend for product navigation.",
+        }));
       }
 
       // If strict operational isolation is configured, ALL /health/* and /metrics routes require operational credentials
@@ -1495,21 +1576,19 @@ export class ApiServer {
 
 
       // 11. List Proposals: GET /api/workspaces/:workspace_id/proposals
-      // (CODE_LEGACY_PRODUCT_DIRECTION: Matches /changesets for backward compatibility)
-      const proposalsMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/(?:proposals|changesets)\/?$/);
+      const proposalsMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/proposals\/?$/);
       if (method === "GET" && proposalsMatch) {
         const workspaceId = decodeURIComponent(proposalsMatch[1]);
         const auth = await this.checkAuthorization(req, workspaceId);
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
-        const list = this.getChangesetsForWorkspace(workspaceId);
-        return finish(200, JSON.stringify({ workspace_id: workspaceId, count: list.length, proposals: list, changesets: list }));
+        const list = this.getProposalsForWorkspace(workspaceId);
+        return finish(200, JSON.stringify({ workspace_id: workspaceId, count: list.length, proposals: list }));
       }
 
       // 12. Create Proposal: POST /api/workspaces/:workspace_id/proposals
-      // (CODE_LEGACY_PRODUCT_DIRECTION: Matches /changesets for backward compatibility)
-      const createProposalMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/(?:proposals|changesets)\/?$/);
+      const createProposalMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/proposals\/?$/);
       if (method === "POST" && createProposalMatch) {
         const workspaceId = decodeURIComponent(createProposalMatch[1]);
         const auth = await this.checkAuthorization(req, workspaceId);
@@ -1519,24 +1598,23 @@ export class ApiServer {
         const bodyText = await this.readRequestBody(req);
         const payload = JSON.parse(bodyText || "{}");
         const id = `prop_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-        const proposal: ChangeSetProposal = {
-          changeset_id: id,
+        const proposal: Proposal = {
+          proposal_id: id,
           workspace_id: workspaceId,
           base_revision: payload.base_revision || "rev-1",
           target_revision: payload.target_revision || "rev-2",
           proposed_by: payload.proposed_by || "human_designer",
-          status: "proposed",
+          status: "ACTIVE",
           mutations: payload.mutations || [],
           created_at: new Date().toISOString(),
           idempotency_key: payload.idempotency_key,
         };
-        this.saveChangeset(proposal);
-        return finish(201, JSON.stringify({ status: "PROPOSED", workspace_id: workspaceId, proposal, changeset: proposal }));
+        this.saveProposal(proposal);
+        return finish(201, JSON.stringify({ status: "ACTIVE", workspace_id: workspaceId, proposal }));
       }
 
       // 13. Get Proposal by ID: GET /api/workspaces/:workspace_id/proposals/:proposal_id
-      // (CODE_LEGACY_PRODUCT_DIRECTION: Matches /changesets for backward compatibility)
-      const singleProposalMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/(?:proposals|changesets)\/([^/]+)\/?$/);
+      const singleProposalMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/proposals\/([^/]+)\/?$/);
       if (method === "GET" && singleProposalMatch) {
         const workspaceId = decodeURIComponent(singleProposalMatch[1]);
         const proposalId = decodeURIComponent(singleProposalMatch[2]);
@@ -1544,16 +1622,15 @@ export class ApiServer {
         if (!auth.authorized) {
           return finish(auth.status, JSON.stringify({ error: auth.code, message: auth.message }));
         }
-        const found = this.getChangesetById(workspaceId, proposalId);
+        const found = this.getProposalById(workspaceId, proposalId);
         if (!found) {
           return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Proposal '${proposalId}' not found` }));
         }
-        return finish(200, JSON.stringify({ workspace_id: workspaceId, proposal: found, changeset: found }));
+        return finish(200, JSON.stringify({ workspace_id: workspaceId, proposal: found }));
       }
 
       // 16. Withdraw Proposal: POST /api/workspaces/:workspace_id/proposals/:proposal_id/withdraw
-      // (CODE_LEGACY_PRODUCT_DIRECTION: Matches /changesets for backward compatibility)
-      const withdrawMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/(?:proposals|changesets)\/([^/]+)\/withdraw\/?$/);
+      const withdrawMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/proposals\/([^/]+)\/withdraw\/?$/);
       if (method === "POST" && withdrawMatch) {
         const workspaceId = decodeURIComponent(withdrawMatch[1]);
         const proposalId = decodeURIComponent(withdrawMatch[2]);
@@ -1563,13 +1640,13 @@ export class ApiServer {
         }
         const bodyText = await this.readRequestBody(req);
         const { reason } = JSON.parse(bodyText || "{}");
-        const found = this.getChangesetById(workspaceId, proposalId);
+        const found = this.getProposalById(workspaceId, proposalId);
         if (!found) {
           return finish(404, JSON.stringify({ error: "NOT_FOUND", message: `Proposal '${proposalId}' not found` }));
         }
-        found.status = "withdrawn";
-        this.saveChangeset(found);
-        return finish(200, JSON.stringify({ status: "WITHDRAWN", workspace_id: workspaceId, proposal: found, changeset: found, reason }));
+        found.status = "WITHDRAWN";
+        this.saveProposal(found);
+        return finish(200, JSON.stringify({ status: "WITHDRAWN", workspace_id: workspaceId, proposal: found, reason }));
       }
 
       // 17. Director Chat & Structured LLM Input: POST /api/workspaces/:workspace_id/chat
@@ -1641,7 +1718,7 @@ export class ApiServer {
           conversation_id: convId || `conv_${workspaceId}_default`,
           snapshot_hash: context?.snapshot_hash ?? state.latest_snapshot_hash ?? "snapshot_default",
           selected_attack_ids: (context?.selected_attack_ids as string[]) ?? [],
-          active_changeset_id: context?.active_changeset_id as string | undefined,
+          active_proposal_id: context?.active_proposal_id as string | undefined,
           user_prompt: prompt,
           timestamp: new Date().toISOString(),
           history: context?.history,
@@ -1672,7 +1749,7 @@ export class ApiServer {
               reply: result.reply,
               activities: result.activities,
               tool_calls: result.tool_calls,
-              proposed_changeset: result.proposed_changeset,
+              proposed_proposal: result.proposed_proposal,
               context_envelope: contextEnvelope,
               llm_orchestrated: true,
             }));
@@ -1690,18 +1767,18 @@ export class ApiServer {
         const lowerPrompt = String(prompt || "").toLowerCase();
         let reply = "";
         const toolCalls: any[] = [];
-        let proposedChangeset: ChangeSetProposal | undefined;
+        let proposedProposal: Proposal | undefined;
 
         if (lowerPrompt.includes("buff") || lowerPrompt.includes("propose") || lowerPrompt.includes("damage")) {
           const targetAttackId = contextEnvelope.selected_attack_ids[0] || "atk_light_punch";
-          const csId = `cs_llm_${Date.now()}`;
-          proposedChangeset = {
-            changeset_id: csId,
+          const proposalId = `prop_llm_${Date.now()}`;
+          proposedProposal = {
+            proposal_id: proposalId,
             workspace_id: workspaceId,
             base_revision: state.latest_revision || "rev-1",
             target_revision: "rev-2",
             proposed_by: "combat_director_llm",
-            status: "proposed",
+            status: "ACTIVE",
             mutations: [
               {
                 type: "attack_damage",
@@ -1713,14 +1790,14 @@ export class ApiServer {
             ],
             created_at: new Date().toISOString(),
           };
-          this.saveChangeset(proposedChangeset);
+          this.saveProposal(proposedProposal);
           toolCalls.push({
-            tool_id: "combat_propose_change",
-            input: { workspace_id: workspaceId, mutations: proposedChangeset.mutations },
-            output: { status: "PROPOSED", proposal_id: csId, changeset_id: csId },
+            tool_id: "combat_create_proposal",
+            input: { workspace_id: workspaceId, mutations: proposedProposal.mutations },
+            output: { status: "ACTIVE", proposal_id: proposalId },
             untrusted_text: true,
           });
-          reply = `I have drafted a suggested adjustment proposal (changeset proposal) to adjust damage for '${targetAttackId}' from 25 to 35. Please review the proposal and examine the diagnostic findings.`;
+          reply = `I have drafted a suggested adjustment proposal to adjust damage for '${targetAttackId}' from 25 to 35. Please review the proposal and examine the diagnostic findings.`;
         } else if (lowerPrompt.includes("simulate")) {
           toolCalls.push({
             tool_id: "combat_simulate",
@@ -1763,8 +1840,8 @@ export class ApiServer {
           workspace_id: workspaceId,
           reply,
           tool_calls: toolCalls,
-          proposal: proposedChangeset,
-          proposed_changeset: proposedChangeset,
+          proposal: proposedProposal,
+          proposed_proposal: proposedProposal,
           context_envelope: contextEnvelope,
         }));
       }

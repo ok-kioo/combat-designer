@@ -131,13 +131,13 @@ priority: P0
 problem: >
   A sugestão propõe regex de sanitização de nomes e delimitação de dados no prompt como
   única defesa. Mas specs/06-mcp-llm-orchestration.md já define uma defesa mais forte:
-  texto de asset é `untrusted_text: true` e um `propose_changeset` não pode ser aceito com
-  base só em texto sem correspondência em dado estruturado do canonical model. Regex de
+  texto de asset é `untrusted_text: true` e uma proposta consultiva não pode ser criada
+  com base só em texto sem correspondência em dado estruturado do canonical model. Regex de
   nome sozinho seria uma defesa mais fraca e redundante se tratada como a solução principal.
 evidence: specs/06-mcp-llm-orchestration.md, seção "Segurança".
 proposed_change: >
-  Manter specs/06 como a defesa primária (arquitetural: LLM nunca decide PASS/FAIL e nunca
-  aceita changeset baseado só em texto não confiável). Adicionar, na ingestão (specs/01/09),
+  Manter specs/06 como a defesa primária (arquitetural: LLM nunca decide status de análise e nunca
+  cria proposta baseada só em texto não confiável). Adicionar, na ingestão (specs/01/09),
   uma camada extra e independente: normalizar/validar `name` de Attack/Hitbox/etc. contra um
   charset restrito (letras, números, underscore, espaço) no momento do parse, e persistir a
   string original bruta separadamente como `raw_label` com `untrusted_text: true` para

@@ -87,7 +87,7 @@ export class SkillRegistry {
         return "Simulando cenário de combate...";
       case "combat_analyze":
         return "Analisando diagnósticos e findings de combate...";
-      case "combat_propose_change":
+      case "combat_create_proposal":
         return "Formulando proposta de balanceamento...";
       case "combat_impact_analysis":
         return "Analisando impacto de alterações...";
@@ -232,7 +232,7 @@ export class SkillRegistry {
         "combat_search",
         "combat_simulate",
         "combat_analyze",
-        "combat_propose_change",
+        "combat_create_proposal",
         "combat_impact_analysis",
       ],
       input_schema: { attack_id: "string", mutations: "array" },
@@ -243,7 +243,7 @@ export class SkillRegistry {
         combat_search: "Analisando valores atuais de combate...",
         combat_simulate: "Simulando impacto da proposta...",
         combat_analyze: "Validando diagnósticos mecânicos da proposta...",
-        combat_propose_change: "Criando proposta de alteração...",
+        combat_create_proposal: "Criando proposta de alteração...",
         combat_impact_analysis: "Avaliando impacto colateral...",
       },
     });
@@ -253,9 +253,9 @@ export class SkillRegistry {
       skill_id: "validate_proposal",
       purpose: "Validate proposed changes against diagnostic findings and project specs",
       allowed_intents: ["SPEC_VALIDATION"],
-      required_context: ["proposed_changeset", "specs"],
+      required_context: ["proposed_proposal", "specs"],
       allowed_tools: ["combat_simulate", "combat_analyze"],
-      input_schema: { changeset_id: "string" },
+      input_schema: { proposal_id: "string" },
       output_schema: { valid: "boolean", findings: "array" },
       validation_requirements: ["require_spec_validation"],
       failure_behavior: "fail_closed",
@@ -273,7 +273,7 @@ export class SkillRegistry {
       required_context: ["simulation_run_id"],
       allowed_tools: ["combat_analyze", "list_scenarios"],
       input_schema: { run_id: "string" },
-      output_schema: { explanation: "string", metrics_summary: "object" },
+      output_schema: { explanation: "string", metriprop_summary: "object" },
       validation_requirements: ["require_simulation_record"],
       failure_behavior: "return_generic_explanation",
       public_labels: {

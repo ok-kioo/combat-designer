@@ -1,15 +1,7 @@
 import { z } from "zod";
 
-export const ChangeSetStatusSchema = z.enum([
-  "proposed",
-  "simulated",
-  "verified",
-  "approved",
-  "applied",
-  "withdrawn",
-  "rejected",
-]);
-export type ChangeSetStatus = z.infer<typeof ChangeSetStatusSchema>;
+export const ProposalStatusSchema = z.enum(["ACTIVE", "WITHDRAWN", "ARCHIVED"]);
+export type ProposalStatus = z.infer<typeof ProposalStatusSchema>;
 
 export const AttackDamageChangeSchema = z.object({
   type: z.literal("attack_damage"),
@@ -66,32 +58,27 @@ export const HitboxChangeSchema = z.object({
   reason: z.string().min(1),
 }).strict();
 
-export const ChangeSetMutationSchema = z.discriminatedUnion("type", [
+export const ProposalMutationSchema = z.discriminatedUnion("type", [
   AttackDamageChangeSchema,
   AttackRecoveryChangeSchema,
   CancelWindowChangeSchema,
   ResourceCostChangeSchema,
   HitboxChangeSchema,
 ]);
-export type ChangeSetMutation = z.infer<typeof ChangeSetMutationSchema>;
+export type ProposalMutation = z.infer<typeof ProposalMutationSchema>;
 
-export const ChangeSetProposalSchema = z.object({
-  changeset_id: z.string().min(1),
+export const ProposalSchema = z.object({
+  proposal_id: z.string().min(1),
   workspace_id: z.string().min(1),
   base_revision: z.string().min(1),
   target_revision: z.string().min(1),
   proposed_by: z.string().min(1),
-  status: ChangeSetStatusSchema,
-  mutations: z.array(ChangeSetMutationSchema).min(1),
+  status: ProposalStatusSchema,
+  mutations: z.array(ProposalMutationSchema).min(1),
   simulation_id: z.string().optional(),
   simulation_hash: z.string().optional(),
-  gate_run_id: z.string().optional(),
-  gate_verdict: z.string().optional(),
-  approved_by: z.string().nullable().optional(),
-  approved_at: z.string().nullable().optional(),
-  applied_at: z.string().nullable().optional(),
   created_at: z.string().min(1),
   idempotency_key: z.string().optional(),
 }).strict();
 
-export type ChangeSetProposal = z.infer<typeof ChangeSetProposalSchema>;
+export type Proposal = z.infer<typeof ProposalSchema>;

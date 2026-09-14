@@ -16,30 +16,30 @@ import type {
   CombatQueryPort,
   SimulationPort,
   CombatAnalysisPort,
-  ChangeSetRepositoryPort,
-  ChangeSetProposal,
+  ProposalRepositoryPort,
+  Proposal,
   AttackSummary,
 } from "@combat-designer/backend";
 
 const PORT = parseInt(process.env.PORT || "3002", 10);
 const API_URL = process.env.API_URL || "http://localhost:3001";
 
-class InMemoryChangeSetRepo implements ChangeSetRepositoryPort {
-  private store = new Map<string, ChangeSetProposal>();
+class InMemoryProposalRepo implements ProposalRepositoryPort {
+  private store = new Map<string, Proposal>();
 
-  async save(proposal: ChangeSetProposal): Promise<ChangeSetProposal> {
-    const key = `${proposal.workspace_id}:${proposal.changeset_id}`;
+  async save(proposal: Proposal): Promise<Proposal> {
+    const key = `${proposal.workspace_id}:${proposal.proposal_id}`;
     this.store.set(key, JSON.parse(JSON.stringify(proposal)));
     return proposal;
   }
 
-  async getById(workspaceId: string, changesetId: string): Promise<ChangeSetProposal | null> {
-    const key = `${workspaceId}:${changesetId}`;
+  async getById(workspaceId: string, proposalId: string): Promise<Proposal | null> {
+    const key = `${workspaceId}:${proposalId}`;
     const found = this.store.get(key);
     return found ? JSON.parse(JSON.stringify(found)) : null;
   }
 
-  async getByIdempotencyKey(workspaceId: string, idempotencyKey: string): Promise<ChangeSetProposal | null> {
+  async getByIdempotencyKey(workspaceId: string, idempotencyKey: string): Promise<Proposal | null> {
     for (const proposal of this.store.values()) {
       if (proposal.workspace_id === workspaceId && proposal.idempotency_key === idempotencyKey) {
         return JSON.parse(JSON.stringify(proposal));
@@ -48,8 +48,8 @@ class InMemoryChangeSetRepo implements ChangeSetRepositoryPort {
     return null;
   }
 
-  async update(proposal: ChangeSetProposal): Promise<ChangeSetProposal> {
-    const key = `${proposal.workspace_id}:${proposal.changeset_id}`;
+  async update(proposal: Proposal): Promise<Proposal> {
+    const key = `${proposal.workspace_id}:${proposal.proposal_id}`;
     this.store.set(key, JSON.parse(JSON.stringify(proposal)));
     return proposal;
   }
@@ -180,7 +180,7 @@ function createServer() {
     queryPort: new HttpCombatQueryAdapter(),
     simulationPort: new HttpSimulationAdapter(),
     analysisPort: new HttpCombatAnalysisAdapter(),
-    changesetRepo: new InMemoryChangeSetRepo(),
+    proposalRepo: new InMemoryProposalRepo(),
   });
 
   const mcpServer = new CombatDesignerMcpServer(gateway, adapter);
@@ -245,7 +245,7 @@ function createServer() {
           const principal = body.principal || {
             principal_id: "http_caller",
             principal_type: "human",
-            capabilities: ["combat:read", "combat:query", "combat:simulate", "combat:analyze", "combat:propose", "changeset:withdraw"],
+            capabilities: ["combat:read", "combat:query", "combat:simulate", "combat:analyze", "combat:propose", "proposal:withdraw"],
             authorized_workspaces: [body.workspace_id || "ws-default", "*"],
           };
           const result = await gateway.execute(principal, toolId, body);

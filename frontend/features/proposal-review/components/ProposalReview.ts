@@ -5,8 +5,6 @@ export interface ProposalReviewProps {
   workspaceId: string;
   apiClient?: ApiClient;
   initialProposals?: any[];
-  // CODE_LEGACY_PRODUCT_DIRECTION
-  initialChangesets?: any[];
 }
 
 export class ProposalReviewController {
@@ -17,7 +15,7 @@ export class ProposalReviewController {
   constructor(props: ProposalReviewProps) {
     this.workspaceId = props.workspaceId;
     this.apiClient = props.apiClient ?? defaultApiClient;
-    const rawList = props.initialProposals ?? props.initialChangesets ?? [];
+    const rawList = props.initialProposals ?? [];
     this.state = {
       workspaceId: props.workspaceId,
       proposals: rawList.map((p) => this.mapProposal(p)),
@@ -29,7 +27,7 @@ export class ProposalReviewController {
   }
 
   private mapProposal(raw: any): ProposalView {
-    const id = raw.id || raw.proposal_id || raw.changeset_id || "prop_unknown";
+    const id = raw.id || raw.proposal_id || "prop_unknown";
     const diffs: MutationDiffItem[] = (raw.mutations || []).map((m: any) => {
       if (m.type === "attack_damage") {
         return {
@@ -64,7 +62,6 @@ export class ProposalReviewController {
     return {
       id,
       proposal_id: id,
-      changeset_id: id,
       workspace_id: raw.workspace_id,
       base_revision: raw.base_revision,
       target_revision: raw.target_revision,
@@ -85,7 +82,7 @@ export class ProposalReviewController {
     this.state.error = undefined;
     try {
       const data = await this.apiClient.getProposals(this.workspaceId);
-      const rawList = data.proposals || data.changesets || [];
+      const rawList = data.proposals || [];
       this.state.proposals = rawList.map((p: any) => this.mapProposal(p));
       if (!this.state.selectedProposalId && this.state.proposals.length > 0) {
         this.state.selectedProposalId = this.state.proposals[0].id;
@@ -99,27 +96,12 @@ export class ProposalReviewController {
     }
   }
 
-  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
-  public async loadChangeSets(): Promise<ProposalView[]> {
-    return this.loadProposals();
-  }
-
   public selectProposal(id: string): void {
     this.state.selectedProposalId = id;
   }
 
-  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
-  public selectChangeset(id: string): void {
-    this.selectProposal(id);
-  }
-
   public getSelectedProposal(): ProposalView | undefined {
     return this.state.proposals.find((p) => p.id === this.state.selectedProposalId);
-  }
-
-  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
-  public getSelectedChangeset(): ProposalView | undefined {
-    return this.getSelectedProposal();
   }
 
   public async withdrawProposal(id: string, reason?: string): Promise<ProposalView> {
@@ -127,7 +109,7 @@ export class ProposalReviewController {
     this.state.error = undefined;
     try {
       const res = await this.apiClient.withdrawProposal(this.workspaceId, id, reason);
-      const updated = this.mapProposal(res.proposal || res.changeset || res);
+      const updated = this.mapProposal(res.proposal || res);
       const idx = this.state.proposals.findIndex((p) => p.id === id);
       if (idx >= 0) {
         this.state.proposals[idx] = updated;
@@ -142,10 +124,6 @@ export class ProposalReviewController {
     }
   }
 
-  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
-  public async withdrawChangeset(id: string, reason?: string): Promise<ProposalView> {
-    return this.withdrawProposal(id, reason);
-  }
 
   public renderModel() {
     const selected = this.getSelectedProposal();
@@ -232,7 +210,7 @@ export class ProposalReviewController {
 
                 <div class="review-actions">
                   ${
-                    sel.status !== "withdrawn"
+                    sel.status !== "WITHDRAWN"
                       ? `<button class="btn btn-danger" id="btn-withdraw-proposal" data-id="${sel.id}">Withdraw Proposal</button>`
                       : `<span class="muted">Proposal has been withdrawn.</span>`
                   }
@@ -246,7 +224,3 @@ export class ProposalReviewController {
     `;
   }
 }
-
-// CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
-export const ChangeSetReviewController = ProposalReviewController;
-export type ChangeSetReviewProps = ProposalReviewProps;

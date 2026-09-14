@@ -45,7 +45,7 @@ function createMockPorts(overrides: Partial<ChatOrchestratorPorts> = {}): ChatOr
         analyzed_at: new Date().toISOString(),
       }),
     } as any,
-    saveChangeset: vi.fn(),
+    saveProposal: vi.fn(),
     getWorkspaceRevision: vi.fn().mockReturnValue("rev-1"),
     ...overrides,
   };
@@ -66,7 +66,7 @@ describe("ChatOrchestrator", () => {
       expect(names).toContain("combat_search");
       expect(names).toContain("combat_simulate");
       expect(names).toContain("combat_analyze");
-      expect(names).toContain("combat_propose_change");
+      expect(names).toContain("combat_create_proposal");
       expect(names).toContain("combat_impact_analysis");
       expect(names).toContain("list_scenarios");
 

@@ -47,12 +47,14 @@ fn make_valid_base_sim() -> SimulationOutput {
         snapshots.push(make_base_snapshot(f, "fighter_1", "neutral", 0, false));
     }
 
-    let mut metrics = SimulationMetrics::default();
-    metrics.total_frames = 60;
-    metrics.damage = 10;
-    metrics.hits = 1;
-    metrics.recovery_frames = 10;
-    metrics.resource_spent = 20;
+    let metrics = SimulationMetrics {
+        total_frames: 60,
+        damage: 10,
+        hits: 1,
+        recovery_frames: 10,
+        resource_spent: 20,
+        ..SimulationMetrics::default()
+    };
 
     let mut event1 = SimulationEvent::new(10, "fighter_1", SimulationEventType::AttackStarted, 1);
     event1.attack_id = Some("slash".to_string());

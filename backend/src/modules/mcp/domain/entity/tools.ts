@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { ChangeSetMutationSchema } from "./changeset.js";
+import { ProposalMutationSchema } from "./proposal.js";
 
 export const TOOL_ALIASES: Record<string, string> = {
   query_combat: "combat_search",
-  simulate_changeset: "combat_simulate",
+  simulate_proposal: "combat_simulate",
   analyze_combat: "combat_analyze",
-  propose_changeset: "combat_propose_change",
-  withdraw_changeset: "combat_withdraw_change",
+  create_proposal: "combat_create_proposal",
+  withdraw_proposal: "combat_withdraw_proposal",
 };
 
 export function resolveCanonicalToolName(toolName: string): string {
@@ -20,9 +20,9 @@ export const CanonicalToolNameSchema = z.enum([
   "impact_analysis",
   "combat_simulate",
   "combat_analyze",
-  "combat_propose_change",
-  "combat_get_change",
-  "combat_withdraw_change",
+  "combat_create_proposal",
+  "combat_get_proposal",
+  "combat_withdraw_proposal",
 ]);
 export type CanonicalToolName = z.infer<typeof CanonicalToolNameSchema>;
 
@@ -84,27 +84,27 @@ export const CombatAnalyzeInputSchema = z.object({
 }).strict();
 export type CombatAnalyzeInput = z.infer<typeof CombatAnalyzeInputSchema>;
 
-// Tool 7: combat_propose_change
+// Tool 7: combat_create_proposal
 export const CombatProposeChangeInputSchema = z.object({
   workspace_id: z.string().min(1),
   base_revision: z.string().min(1),
   target_revision: z.string().min(1),
-  mutations: z.array(ChangeSetMutationSchema).min(1),
+  mutations: z.array(ProposalMutationSchema).min(1),
   idempotency_key: z.string().optional(),
 }).strict();
 export type CombatProposeChangeInput = z.infer<typeof CombatProposeChangeInputSchema>;
 
-// Tool 8: combat_get_change
+// Tool 8: combat_get_proposal
 export const CombatGetChangeInputSchema = z.object({
   workspace_id: z.string().min(1),
-  changeset_id: z.string().min(1),
+  proposal_id: z.string().min(1),
 }).strict();
 export type CombatGetChangeInput = z.infer<typeof CombatGetChangeInputSchema>;
 
-// Tool 9: combat_withdraw_change
+// Tool 9: combat_withdraw_proposal
 export const CombatWithdrawChangeInputSchema = z.object({
   workspace_id: z.string().min(1),
-  changeset_id: z.string().min(1),
+  proposal_id: z.string().min(1),
   reason: z.string().min(1),
 }).strict();
 export type CombatWithdrawChangeInput = z.infer<typeof CombatWithdrawChangeInputSchema>;

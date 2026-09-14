@@ -127,7 +127,7 @@ describe("SPEC 06 — Gateway & Server Functional Tests (06.T.1 - 06.T.12)", () 
   });
 
   it("06.T.9: proposal creation does NOT apply or mutate canonical model", async () => {
-    const result = await env.gateway.execute(env.llmDirector, "combat_propose_change", {
+    const result = await env.gateway.execute(env.llmDirector, "combat_create_proposal", {
       workspace_id: "ws-alpha",
       base_revision: "rev-1",
       target_revision: "rev-2",
@@ -143,12 +143,12 @@ describe("SPEC 06 — Gateway & Server Functional Tests (06.T.1 - 06.T.12)", () 
     });
 
     const data = result.data as any;
-    expect(data.proposal.status).toBe("proposed");
+    expect(data.proposal.status).toBe("ACTIVE");
     expect(data.proposal.applied_at).toBeUndefined();
 
     // Verify stored proposal in repository is strictly in 'proposed' state
-    const stored = await env.changesetRepo.getById("ws-alpha", data.proposal.changeset_id);
-    expect(stored?.status).toBe("proposed");
+    const stored = await env.proposalRepo.getById("ws-alpha", data.proposal.proposal_id);
+    expect(stored?.status).toBe("ACTIVE");
     expect(stored?.applied_at).toBeUndefined();
   });
 
@@ -156,13 +156,13 @@ describe("SPEC 06 — Gateway & Server Functional Tests (06.T.1 - 06.T.12)", () 
     await expect(
       env.gateway.execute(env.humanLead, "apply_mutation" as any, {
         workspace_id: "ws-alpha",
-        changeset_id: "cs-123",
+        proposal_id: "cs-123",
       })
     ).rejects.toThrow(/Unknown or unregistered tool/);
   });
 
   it("06.T.11: consultative proposals remain proposed until withdrawn", async () => {
-    const proposeRes = await env.gateway.execute(env.llmDirector, "combat_propose_change", {
+    const proposeRes = await env.gateway.execute(env.llmDirector, "combat_create_proposal", {
       workspace_id: "ws-alpha",
       base_revision: "rev-1",
       target_revision: "rev-2",
@@ -176,12 +176,12 @@ describe("SPEC 06 — Gateway & Server Functional Tests (06.T.1 - 06.T.12)", () 
         },
       ],
     });
-    const changesetId = (proposeRes.data as any).proposal.changeset_id;
-    const found = await env.adapter.getChangeset("ws-alpha", changesetId);
-    expect(found?.status).toBe("proposed");
+    const proposalId = (proposeRes.data as any).proposal.proposal_id;
+    const found = await env.adapter.getProposal("ws-alpha", proposalId);
+    expect(found?.status).toBe("ACTIVE");
 
-    const withdrawn = await env.adapter.withdrawChangeset("ws-alpha", changesetId, "Design pivot");
-    expect(withdrawn.status).toBe("withdrawn");
+    const withdrawn = await env.adapter.withdrawProposal("ws-alpha", proposalId, "Design pivot");
+    expect(withdrawn.status).toBe("WITHDRAWN");
   });
 
   it("06.T.12: repeated side-effect request is idempotent", async () => {
@@ -201,13 +201,13 @@ describe("SPEC 06 — Gateway & Server Functional Tests (06.T.1 - 06.T.12)", () 
       idempotency_key: "idempotency_test_key_42",
     };
 
-    const res1 = await env.gateway.execute(env.llmDirector, "combat_propose_change", input);
-    const res2 = await env.gateway.execute(env.llmDirector, "combat_propose_change", input);
+    const res1 = await env.gateway.execute(env.llmDirector, "combat_create_proposal", input);
+    const res2 = await env.gateway.execute(env.llmDirector, "combat_create_proposal", input);
 
     const cs1 = (res1.data as any).proposal;
     const cs2 = (res2.data as any).proposal;
 
-    expect(cs1.changeset_id).toBe(cs2.changeset_id);
+    expect(cs1.proposal_id).toBe(cs2.proposal_id);
     expect(cs1.created_at).toBe(cs2.created_at);
   });
 });

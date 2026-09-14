@@ -54,7 +54,7 @@ export class GatewayAuthenticator {
           "combat:simulate",
           "combat:analyze",
           "combat:propose",
-          "changeset:withdraw",
+          "proposal:withdraw",
         ],
         authorized_workspaces: ["*"],
       };

@@ -10,9 +10,7 @@ export const CapabilitySchema = z.enum([
   "combat:analyze",
   "combat:verify",
   "combat:propose",
-  "changeset:withdraw",
-  "changeset:approve",
-  "changeset:apply",
+  "proposal:withdraw",
   "admin:workspace",
   "admin:policy",
 ]);

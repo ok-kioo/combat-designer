@@ -1,31 +1,31 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type {
-  ChangeSetProposal,
+  Proposal,
   Principal,
 } from "@combat-designer/backend";
-import type { ChangeSetRepositoryPort } from "../../../src/modules/changeset/domain/repository/changeset-repository-port.js";
+import type { ProposalRepositoryPort } from "../../../src/modules/proposal/domain/repository/proposal-repository-port.js";
 import {
-  proposeChangesetUseCase,
-  getChangesetUseCase,
-  withdrawChangesetUseCase,
+  createProposalUseCase,
+  getProposalUseCase,
+  withdrawProposalUseCase,
 } from "../../../src/index.js";
 
-class InMemoryChangeSetRepository implements ChangeSetRepositoryPort {
-  private store = new Map<string, ChangeSetProposal>();
+class InMemoryProposalRepository implements ProposalRepositoryPort {
+  private store = new Map<string, Proposal>();
 
-  async save(proposal: ChangeSetProposal): Promise<ChangeSetProposal> {
-    const key = `${proposal.workspace_id}:${proposal.changeset_id}`;
+  async save(proposal: Proposal): Promise<Proposal> {
+    const key = `${proposal.workspace_id}:${proposal.proposal_id}`;
     this.store.set(key, JSON.parse(JSON.stringify(proposal)));
     return proposal;
   }
 
-  async getById(workspaceId: string, changesetId: string): Promise<ChangeSetProposal | null> {
-    const key = `${workspaceId}:${changesetId}`;
+  async getById(workspaceId: string, proposalId: string): Promise<Proposal | null> {
+    const key = `${workspaceId}:${proposalId}`;
     const found = this.store.get(key);
     return found ? JSON.parse(JSON.stringify(found)) : null;
   }
 
-  async getByIdempotencyKey(workspaceId: string, idempotencyKey: string): Promise<ChangeSetProposal | null> {
+  async getByIdempotencyKey(workspaceId: string, idempotencyKey: string): Promise<Proposal | null> {
     for (const proposal of this.store.values()) {
       if (proposal.workspace_id === workspaceId && proposal.idempotency_key === idempotencyKey) {
         return JSON.parse(JSON.stringify(proposal));
@@ -34,18 +34,18 @@ class InMemoryChangeSetRepository implements ChangeSetRepositoryPort {
     return null;
   }
 
-  async update(proposal: ChangeSetProposal): Promise<ChangeSetProposal> {
-    const key = `${proposal.workspace_id}:${proposal.changeset_id}`;
+  async update(proposal: Proposal): Promise<Proposal> {
+    const key = `${proposal.workspace_id}:${proposal.proposal_id}`;
     this.store.set(key, JSON.parse(JSON.stringify(proposal)));
     return proposal;
   }
 }
 
-describe("ChangeSet Lifecycle & Consultative Boundaries", () => {
-  let repo: InMemoryChangeSetRepository;
+describe("Proposal Lifecycle & Consultative Boundaries", () => {
+  let repo: InMemoryProposalRepository;
 
   beforeEach(() => {
-    repo = new InMemoryChangeSetRepository();
+    repo = new InMemoryProposalRepository();
   });
 
   const humanPrincipal: Principal = {
@@ -62,8 +62,8 @@ describe("ChangeSet Lifecycle & Consultative Boundaries", () => {
     authorized_workspaces: ["ws-1"],
   };
 
-  it("proposes a changeset in 'proposed' status and preserves idempotency", async () => {
-    const proposal1 = await proposeChangesetUseCase(repo, {
+  it("proposes a proposal in 'proposed' status and preserves idempotency", async () => {
+    const proposal1 = await createProposalUseCase(repo, {
       workspace_id: "ws-1",
       base_revision: "rev-1",
       target_revision: "rev-2",
@@ -80,10 +80,10 @@ describe("ChangeSet Lifecycle & Consultative Boundaries", () => {
       idempotency_key: "idem-key-001",
     });
 
-    expect(proposal1.status).toBe("proposed");
+    expect(proposal1.status).toBe("ACTIVE");
 
     // Idempotent retry returns identical proposal
-    const proposal2 = await proposeChangesetUseCase(repo, {
+    const proposal2 = await createProposalUseCase(repo, {
       workspace_id: "ws-1",
       base_revision: "rev-1",
       target_revision: "rev-2",
@@ -100,11 +100,11 @@ describe("ChangeSet Lifecycle & Consultative Boundaries", () => {
       idempotency_key: "idem-key-001",
     });
 
-    expect(proposal2.changeset_id).toBe(proposal1.changeset_id);
+    expect(proposal2.proposal_id).toBe(proposal1.proposal_id);
   });
 
   it("retrieves a proposal by id", async () => {
-    const proposal = await proposeChangesetUseCase(repo, {
+    const proposal = await createProposalUseCase(repo, {
       workspace_id: "ws-1",
       base_revision: "rev-1",
       target_revision: "rev-2",
@@ -120,15 +120,15 @@ describe("ChangeSet Lifecycle & Consultative Boundaries", () => {
       ],
     });
 
-    const retrieved = await getChangesetUseCase(repo, "ws-1", proposal.changeset_id);
+    const retrieved = await getProposalUseCase(repo, "ws-1", proposal.proposal_id);
 
     expect(retrieved).not.toBeNull();
-    expect(retrieved?.changeset_id).toBe(proposal.changeset_id);
-    expect(retrieved?.status).toBe("proposed");
+    expect(retrieved?.proposal_id).toBe(proposal.proposal_id);
+    expect(retrieved?.status).toBe("ACTIVE");
   });
 
-  it("withdraws a proposed changeset with a reason", async () => {
-    const proposal = await proposeChangesetUseCase(repo, {
+  it("withdraws a proposed proposal with a reason", async () => {
+    const proposal = await createProposalUseCase(repo, {
       workspace_id: "ws-1",
       base_revision: "rev-1",
       target_revision: "rev-2",
@@ -144,22 +144,22 @@ describe("ChangeSet Lifecycle & Consultative Boundaries", () => {
       ],
     });
 
-    const withdrawn = await withdrawChangesetUseCase(
+    const withdrawn = await withdrawProposalUseCase(
       repo,
       "ws-1",
-      proposal.changeset_id,
+      proposal.proposal_id,
       "Superseded by alternative design"
     );
 
-    expect(withdrawn.status).toBe("withdrawn");
+    expect(withdrawn.status).toBe("WITHDRAWN");
 
-    const retrieved = await getChangesetUseCase(repo, "ws-1", proposal.changeset_id);
-    expect(retrieved?.status).toBe("withdrawn");
+    const retrieved = await getProposalUseCase(repo, "ws-1", proposal.proposal_id);
+    expect(retrieved?.status).toBe("WITHDRAWN");
   });
 
   it("rejects proposal with empty mutations", async () => {
     await expect(
-      proposeChangesetUseCase(repo, {
+      createProposalUseCase(repo, {
         workspace_id: "ws-1",
         base_revision: "rev-1",
         target_revision: "rev-2",

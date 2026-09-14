@@ -41,9 +41,8 @@ export interface ToolCallPreview {
   untrusted_text?: boolean;
 }
 
-export interface ProposedChangesetCard {
-  changeset_id: string;
-  proposal_id?: string;
+export interface ProposedProposalCard {
+  proposal_id: string;
   id?: string;
   target_revision: string;
   mutations: Array<{
@@ -55,7 +54,7 @@ export interface ProposedChangesetCard {
   }>;
 }
 
-export type ProposalAdjustmentCard = ProposedChangesetCard;
+export type ProposalAdjustmentCard = ProposedProposalCard;
 
 export interface ChatMessage {
   id: string;
@@ -65,7 +64,7 @@ export interface ChatMessage {
   status?: "pending" | "streaming" | "completed" | "error" | "cancelled";
   toolCalls?: ToolCallPreview[];
   activities?: PublicActivity[];
-  proposedChangeset?: ProposedChangesetCard;
+  proposedProposal?: ProposedProposalCard;
   timestamp: string;
 }
 
@@ -74,7 +73,7 @@ export interface LlmPromptContextEnvelope {
   conversation_id?: string;
   snapshot_hash: string;
   selected_attack_ids: string[];
-  active_changeset_id?: string;
+  active_proposal_id?: string;
   user_prompt: string;
   timestamp: string;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
@@ -93,7 +92,7 @@ export interface DirectorChatResponse {
   };
   activities?: PublicActivity[];
   tool_calls?: ToolCallPreview[];
-  proposed_changeset?: any;
+  proposed_proposal?: any;
   context_envelope: LlmPromptContextEnvelope;
   error?: {
     code: PublicChatErrorCode;
@@ -109,6 +108,6 @@ export interface DirectorChatState {
   processingState: ChatProcessingState;
   activities: PublicActivity[];
   selectedAttackIds: string[];
-  activeChangesetId?: string;
+  activeProposalId?: string;
   error?: string;
 }

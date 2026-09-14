@@ -2,7 +2,7 @@ import type {
   SimulationPort,
   CombatAnalysisPort,
   CombatQueryPort,
-  ChangeSetRepositoryPort,
+  ProposalRepositoryPort,
   AttackSummary,
   ImpactAnalysisResult,
   ProvenanceInfo,
@@ -14,28 +14,28 @@ import type {
   SimulationOutput,
   VerificationRequest,
   CombatAnalysisResult,
-  ChangeSetProposal,
+  Proposal,
 } from "@combat-designer/backend";
 import { ApplicationAdapter } from "../../server/src/adapters/application-adapter.js";
 import { McpGatewayRouter } from "../../gateway/src/routing/router.js";
 import { CombatDesignerMcpServer } from "../../server/src/mcp-server.js";
 
-export class InMemoryChangeSetRepo implements ChangeSetRepositoryPort {
-  private store = new Map<string, ChangeSetProposal>();
+export class InMemoryProposalRepo implements ProposalRepositoryPort {
+  private store = new Map<string, Proposal>();
 
-  async save(proposal: ChangeSetProposal): Promise<ChangeSetProposal> {
-    const key = `${proposal.workspace_id}:${proposal.changeset_id}`;
+  async save(proposal: Proposal): Promise<Proposal> {
+    const key = `${proposal.workspace_id}:${proposal.proposal_id}`;
     this.store.set(key, JSON.parse(JSON.stringify(proposal)));
     return proposal;
   }
 
-  async getById(workspaceId: string, changesetId: string): Promise<ChangeSetProposal | null> {
-    const key = `${workspaceId}:${changesetId}`;
+  async getById(workspaceId: string, proposalId: string): Promise<Proposal | null> {
+    const key = `${workspaceId}:${proposalId}`;
     const found = this.store.get(key);
     return found ? JSON.parse(JSON.stringify(found)) : null;
   }
 
-  async getByIdempotencyKey(workspaceId: string, idempotencyKey: string): Promise<ChangeSetProposal | null> {
+  async getByIdempotencyKey(workspaceId: string, idempotencyKey: string): Promise<Proposal | null> {
     for (const proposal of this.store.values()) {
       if (proposal.workspace_id === workspaceId && proposal.idempotency_key === idempotencyKey) {
         return JSON.parse(JSON.stringify(proposal));
@@ -44,8 +44,8 @@ export class InMemoryChangeSetRepo implements ChangeSetRepositoryPort {
     return null;
   }
 
-  async update(proposal: ChangeSetProposal): Promise<ChangeSetProposal> {
-    const key = `${proposal.workspace_id}:${proposal.changeset_id}`;
+  async update(proposal: Proposal): Promise<Proposal> {
+    const key = `${proposal.workspace_id}:${proposal.proposal_id}`;
     this.store.set(key, JSON.parse(JSON.stringify(proposal)));
     return proposal;
   }
@@ -180,13 +180,13 @@ export class MockCombatAnalysisAdapter implements CombatAnalysisPort {
 }
 
 export function createTestEnvironment() {
-  const changesetRepo = new InMemoryChangeSetRepo();
+  const proposalRepo = new InMemoryProposalRepo();
   const queryPort = new MockCombatQueryAdapter();
   const simulationPort = new MockSimulatorAdapter();
   const analysisPort = new MockCombatAnalysisAdapter();
 
   const adapter = new ApplicationAdapter({
-    changesetRepo,
+    proposalRepo,
     queryPort,
     simulationPort,
     analysisPort,
@@ -204,7 +204,7 @@ export function createTestEnvironment() {
       "combat:simulate",
       "combat:analyze",
       "combat:propose",
-      "changeset:withdraw",
+      "proposal:withdraw",
     ],
     authorized_workspaces: ["ws-alpha"],
   };
@@ -218,7 +218,7 @@ export function createTestEnvironment() {
       "combat:simulate",
       "combat:analyze",
       "combat:propose",
-      "changeset:withdraw",
+      "proposal:withdraw",
     ],
     authorized_workspaces: ["ws-alpha"],
   };
@@ -231,7 +231,7 @@ export function createTestEnvironment() {
   };
 
   return {
-    changesetRepo,
+    proposalRepo,
     queryPort,
     simulationPort,
     analysisPort,

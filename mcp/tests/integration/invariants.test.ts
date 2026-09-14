@@ -21,8 +21,8 @@ describe("SPEC 06 — Authority & Architectural Invariants (Section 33)", () => 
     expect(data.status).toBe("COMPLETED");
   });
 
-  it("Invariant: ChangeSets are strictly consultative proposals and cannot directly persist to canonical state", async () => {
-    const proposal = await env.adapter.proposeChangeset(
+  it("Invariant: Proposals are strictly consultative proposals and cannot directly persist to canonical state", async () => {
+    const proposal = await env.adapter.createProposal(
       "ws-alpha",
       "rev-1",
       "rev-2",
@@ -38,20 +38,20 @@ describe("SPEC 06 — Authority & Architectural Invariants (Section 33)", () => 
       ]
     );
 
-    expect(proposal.status).toBe("proposed");
+    expect(proposal.status).toBe("ACTIVE");
     expect((proposal as any).applied_at).toBeUndefined();
 
     // Direct mutation tools do not exist in gateway
     await expect(
       env.gateway.execute(env.llmDirector, "apply_mutation" as any, {
         workspace_id: "ws-alpha",
-        changeset_id: proposal.changeset_id,
+        proposal_id: proposal.proposal_id,
       })
     ).rejects.toThrow();
   });
 
-  it("Invariant: Proposed changesets can only transition to withdrawn", async () => {
-    const proposal = await env.adapter.proposeChangeset(
+  it("Invariant: Proposed proposals can only transition to withdrawn", async () => {
+    const proposal = await env.adapter.createProposal(
       "ws-alpha",
       "rev-1",
       "rev-2",
@@ -67,15 +67,15 @@ describe("SPEC 06 — Authority & Architectural Invariants (Section 33)", () => 
       ]
     );
 
-    expect(proposal.status).toBe("proposed");
+    expect(proposal.status).toBe("ACTIVE");
 
-    const withdrawn = await env.adapter.withdrawChangeset(
+    const withdrawn = await env.adapter.withdrawProposal(
       "ws-alpha",
-      proposal.changeset_id,
+      proposal.proposal_id,
       "Superseded by alternate design"
     );
 
-    expect(withdrawn.status).toBe("withdrawn");
+    expect(withdrawn.status).toBe("WITHDRAWN");
   });
 
   it("Invariant: Workspace isolation prevents cross-workspace tool execution", async () => {

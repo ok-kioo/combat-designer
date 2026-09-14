@@ -119,15 +119,15 @@ describe("SPEC 14 — Frontend UX, Navigation & Workspaces (UX.WS.1 to UX.WS.7)"
     expect(html).toContain("Ver Guia de Início Rápido");
   });
 
-  it("UX.WS.7: ChangeSets and raw database infrastructure terms are strictly absent from views", () => {
+  it("UX.WS.7: Proposals and raw database infrastructure terms are strictly absent from views", () => {
     const landing = new LandingPageController({ isAuthenticated: false }).renderHtml();
     const dashboard = new WorkspaceDashboardController({ workspaces: [] }).renderHtml();
 
-    // Verify absence of ChangeSet review panels and raw database leaks
-    expect(landing).not.toContain("ChangeSet Review");
+    // Verify absence of Proposal review panels and raw database leaks
+    expect(landing).not.toContain("Proposal Review");
     expect(landing).not.toContain("PostgreSQL");
     expect(landing).not.toContain("Neo4j");
-    expect(dashboard).not.toContain("ChangeSet");
+    expect(dashboard).not.toContain("Proposal");
     expect(dashboard).not.toContain("PostgreSQL");
   });
 });

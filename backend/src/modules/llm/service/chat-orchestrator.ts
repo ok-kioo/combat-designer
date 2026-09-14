@@ -45,7 +45,7 @@ import type {
   CombatAnalysisPort,
 } from "../../combat/domain/repository/index.js";
 import type { SimulationInput, SimulationOutput, VerificationRequest } from "@combat-designer/backend";
-import type { ChangeSetProposal } from "../../changeset/domain/entity/index.js";
+import type { Proposal } from "../../proposal/domain/entity/index.js";
 import { getCombatToolDeclarations } from "./combat-tool-declarations.js";
 import { ChatIntentClassifier } from "./chat-intent-classifier.js";
 import { SkillRegistry } from "./skill-registry.js";
@@ -70,7 +70,7 @@ export interface ChatContextEnvelope {
   skill_id?: string;
   snapshot_hash: string;
   selected_attack_ids: string[];
-  active_changeset_id?: string;
+  active_proposal_id?: string;
   user_prompt: string;
   timestamp: string;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
@@ -96,7 +96,7 @@ export interface ChatOrchestratorResult {
   };
   activities: PublicActivity[];
   tool_calls: ToolCallRecord[];
-  proposed_changeset?: ChangeSetProposal;
+  proposed_proposal?: Proposal;
   error?: {
     code: PublicChatErrorCode;
     message: string;
@@ -107,7 +107,7 @@ export interface ChatOrchestratorPorts {
   queryPort?: CombatQueryPort;
   simulationPort?: SimulationPort;
   analysisPort?: CombatAnalysisPort;
-  saveChangeset: (proposal: ChangeSetProposal) => void;
+  saveProposal: (proposal: Proposal) => void;
   getWorkspaceRevision: (workspaceId: string) => string | undefined;
 }
 
@@ -217,7 +217,7 @@ export class ChatOrchestrator {
         userPrompt: prompt,
         snapshotHash: envelope.snapshot_hash,
         selectedAttackIds: envelope.selected_attack_ids,
-        activeChangesetId: envelope.active_changeset_id,
+        activeProposalId: envelope.active_proposal_id,
         historyMessages: envelope.history,
       },
       skill.purpose
@@ -250,7 +250,7 @@ export class ChatOrchestrator {
 
     const toolCallRecords: ToolCallRecord[] = [];
     const publicActivities: PublicActivity[] = [];
-    let proposedChangeset: ChangeSetProposal | undefined;
+    let proposedProposal: Proposal | undefined;
 
     const history: Array<{ role: "user" | "model"; parts: any[] }> = [];
 
@@ -350,8 +350,8 @@ export class ChatOrchestrator {
 
         toolCallRecords.push(execResult.record);
 
-        if (fc.name === "combat_propose_change" && execResult.changeset) {
-          proposedChangeset = execResult.changeset;
+        if (fc.name === "combat_create_proposal" && execResult.proposal) {
+          proposedProposal = execResult.proposal;
         }
       }
 
@@ -406,7 +406,7 @@ export class ChatOrchestrator {
       },
       activities: publicActivities,
       tool_calls: toolCallRecords,
-      proposed_changeset: proposedChangeset,
+      proposed_proposal: proposedProposal,
     };
   }
 
@@ -437,11 +437,11 @@ export class ChatOrchestrator {
   ): Promise<{
     output: unknown;
     record: ToolCallRecord;
-    changeset?: ChangeSetProposal;
+    proposal?: Proposal;
   }> {
     let output: unknown;
     let untrustedText = false;
-    let changeset: ChangeSetProposal | undefined;
+    let proposal: Proposal | undefined;
 
     try {
       switch (fc.name) {
@@ -626,30 +626,30 @@ export class ChatOrchestrator {
           break;
         }
 
-        case "combat_propose_change": {
+        case "combat_create_proposal": {
           const mutations = (fc.args.mutations as any[]) || [];
           const baseRevision = (fc.args.base_revision as string) || this.ports.getWorkspaceRevision(workspaceId) || "rev-1";
           const targetRevision = (fc.args.target_revision as string) || "rev-proposed";
-          const csId = `cs_llm_${Date.now()}`;
+          const csId = `prop_llm_${Date.now()}`;
 
-          changeset = {
-            changeset_id: csId,
+          proposal = {
+            proposal_id: csId,
             workspace_id: workspaceId,
             base_revision: baseRevision,
             target_revision: targetRevision,
             proposed_by: "combat_director_llm",
-            status: "proposed",
+            status: "ACTIVE",
             mutations,
             created_at: new Date().toISOString(),
           };
-          this.ports.saveChangeset(changeset);
+          this.ports.saveProposal(proposal);
 
           // Canonical Flow: Proposal -> Spec Validation
-          const specResult = this.specValidator.validate(changeset);
+          const specResult = this.specValidator.validate(proposal);
 
           output = {
-            status: "PROPOSED",
-            changeset_id: csId,
+            status: "ACTIVE",
+            proposal_id: csId,
             mutations_count: mutations.length,
             spec_validation: specResult,
             message: "Proposta criada para revisão humana. O Combat Director não altera a Unity.",
@@ -698,7 +698,7 @@ export class ChatOrchestrator {
         output,
         untrusted_text: untrustedText,
       },
-      changeset,
+      proposal,
     };
   }
 }

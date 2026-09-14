@@ -2,17 +2,16 @@
  * Combat Designer — Application Server Entrypoint
  *
  * Runs the backend HTTP API Server with:
- * - Pre-seeded demo workspace (`ws-default`) with fighting game attacks
+ * - Pre-seeded demo attacks for local exploration
  * - GeminiProvider LLM orchestrator (when GEMINI_API_KEY is present)
- * - Interactive browser workbench UI at http://localhost:3001
- * - Full REST API routes for catalog, simulations, gate verifications, changesets, and chat
+ * - REST API routes for auth, workspaces, catalog, simulations, analysis, proposals, and chat
  */
 
 import { ApiServer } from "./infrastructure/http/server.js";
 import { GeminiProvider } from "./infrastructure/provider/llm/gemini-provider.js";
 import type { LlmProvider } from "./modules/llm/domain/port/llm-provider.js";
 import type { CanonicalSnapshotEnvelope } from "./modules/ingestion/domain/entity/snapshot.js";
-import type { ChangeSetProposal } from "./modules/changeset/domain/entity/index.js";
+import type { Proposal } from "./modules/proposal/domain/entity/index.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 const DEFAULT_WORKSPACE = process.env.DEFAULT_WORKSPACE || "ws-default";
@@ -44,7 +43,7 @@ async function main() {
   });
 
   // Seed default workspace with fighting game attacks for instant exploration
-  seedDefaultWorkspace(server, DEFAULT_WORKSPACE);
+  await seedDefaultWorkspace(server, DEFAULT_WORKSPACE);
 
   await server.listen();
 
@@ -53,16 +52,16 @@ async function main() {
   console.log(`👉 REST API Base:       http://localhost:${PORT}/api/workspaces/${DEFAULT_WORKSPACE}`);
   console.log(`👉 Health Check:        http://localhost:${PORT}/health`);
   console.log(`👉 Metrics:             http://localhost:${PORT}/metrics`);
-  console.log("\nAvailable Features in Browser Workbench:");
-  console.log("  1. 📋 Attack Catalog with frame data & LLM selection checkboxes");
-  console.log("  2. 🎮 Deterministic Simulator & Mechanical Gate Safety Checks");
-  console.log("  3. 📝 ChangeSet Review (Approve, Apply, Withdraw mutations)");
-  console.log("  4. 💬 Combat Director Chat (Gemini LLM / Function Calling)");
+  console.log("\nAvailable API capabilities:");
+  console.log("  1. Attack catalog and deterministic simulations");
+  console.log("  2. Combat analysis with findings and recommendations");
+  console.log("  3. Consultative proposals without engine mutation");
+  console.log("  4. Combat Director Chat (Gemini LLM / Function Calling)");
   console.log("==================================================\n");
 }
 
-function seedDefaultWorkspace(server: ApiServer, workspaceId: string) {
-  server.seedDemoAttacks(workspaceId);
+async function seedDefaultWorkspace(server: ApiServer, workspaceId: string): Promise<void> {
+  await server.seedDemoAttacks(workspaceId);
 }
 
 main().catch((err) => {

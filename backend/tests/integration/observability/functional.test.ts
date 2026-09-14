@@ -15,8 +15,7 @@ import {
   API_METRICS,
   GATEWAY_METRICS,
   SIMULATION_METRICS,
-  GATE_METRICS,
-  CHANGESET_METRICS,
+  PROPOSAL_METRICS,
   redactSensitiveData,
   parseTraceparent,
   formatTraceparent,
@@ -127,40 +126,39 @@ describe("SPEC 07 — Functional Tests (07.T.1 – 07.T.19)", () => {
     expect(logs.some((l) => l.event_name === "simulation_completed")).toBe(true);
   });
 
-  it("07.T.5: Mechanical Gate produces telemetry", () => {
-    adapter.recordMetric(GATE_METRICS.RUN_COUNT, 1, { verdict: "PASS" });
-    adapter.recordMetric(GATE_METRICS.PASS_COUNT, 1, { verdict: "PASS" });
-    adapter.recordMetric(GATE_METRICS.DURATION_MS, 15, { verdict: "PASS" });
+  it("07.T.5: Combat analysis produces telemetry", () => {
+    adapter.recordMetric("combat_analysis_count", 1, { status: "COMPLETED" });
+    adapter.recordMetric("combat_analysis_duration_ms", 15, { status: "COMPLETED" });
 
     adapter.emitLog({
       timestamp: new Date().toISOString(),
       level: "info",
-      event_name: "gate_evaluated",
-      status: "SUCCESS",
-      details: { verdict: "PASS", checks: 11, violations: 0 },
+      event_name: "analysis_completed",
+      status: "COMPLETED",
+      details: { findings: 0, recommendations: 2 },
     });
 
     const logs = logger.getRetainedLogs();
-    expect(logs.some((l) => l.event_name === "gate_evaluated" && l.details?.verdict === "PASS")).toBe(true);
+    expect(logs.some((l) => l.event_name === "analysis_completed" && l.status === "COMPLETED")).toBe(true);
   });
 
-  it("07.T.6: ChangeSet lifecycle emits telemetry", () => {
-    const states = ["PROPOSED", "SIMULATED", "VERIFIED", "APPROVED", "APPLIED"];
+  it("07.T.6: Proposal lifecycle emits telemetry", () => {
+    const states = ["ACTIVE", "WITHDRAWN", "ARCHIVED"];
     for (const state of states) {
       adapter.emitLog({
         timestamp: new Date().toISOString(),
         level: "info",
-        event_name: "changeset_transitioned",
+        event_name: "proposal_transitioned",
         details: { state },
       });
     }
 
-    adapter.recordMetric(CHANGESET_METRICS.PROPOSED_COUNT, 1);
-    adapter.recordMetric(CHANGESET_METRICS.APPROVED_COUNT, 1);
-    adapter.recordMetric(CHANGESET_METRICS.APPLIED_COUNT, 1);
+    adapter.recordMetric(PROPOSAL_METRICS.CREATED_COUNT, 1);
+    adapter.recordMetric(PROPOSAL_METRICS.WITHDRAWN_COUNT, 1);
+    adapter.recordMetric(PROPOSAL_METRICS.ARCHIVED_COUNT, 1);
 
     const logs = logger.getRetainedLogs();
-    expect(logs.length).toBe(5);
+    expect(logs.length).toBe(3);
   });
 
   it("07.T.7: Authorization denial emits telemetry", () => {
@@ -171,7 +169,7 @@ describe("SPEC 07 — Functional Tests (07.T.1 – 07.T.19)", () => {
       event_name: "gateway_auth_denied",
       status: "DENIED",
       error_code: "UNAUTHORIZED",
-      details: { required_capability: "changeset:apply" },
+      details: { required_capability: "proposal:withdraw" },
     });
 
     const logs = logger.getRetainedLogs();
@@ -196,7 +194,6 @@ describe("SPEC 07 — Functional Tests (07.T.1 – 07.T.19)", () => {
 
   it("07.T.9: Budget exhaustion emits telemetry", () => {
     adapter.recordMetric(SIMULATION_METRICS.BUDGET_EXCEEDED_COUNT, 1, { reason: "MAX_FRAMES" });
-    adapter.recordMetric(GATE_METRICS.BUDGET_EXCEEDED_COUNT, 1, { reason: "SEARCH_SPACE" });
     adapter.emitLog({
       timestamp: new Date().toISOString(),
       level: "warn",
@@ -209,14 +206,14 @@ describe("SPEC 07 — Functional Tests (07.T.1 – 07.T.19)", () => {
     expect(logs[0].status).toBe("BUDGET_EXCEEDED");
   });
 
-  it("07.T.10: Stale Gate emits telemetry", () => {
-    adapter.recordMetric(GATE_METRICS.STALE_COUNT, 1, { reason: "MODEL_REVISION_MISMATCH" });
+  it("07.T.10: Stale analysis emits telemetry", () => {
+    adapter.recordMetric("combat_analysis_stale_count", 1, { reason: "MODEL_REVISION_MISMATCH" });
     adapter.emitLog({
       timestamp: new Date().toISOString(),
       level: "warn",
-      event_name: "gate_stale_detected",
+      event_name: "analysis_stale_detected",
       status: "STALE",
-      details: { gate_run_id: "gr-1", original_rev: "rev-1", current_rev: "rev-2" },
+      details: { analysis_id: "an-1", original_rev: "rev-1", current_rev: "rev-2" },
     });
 
     const logs = logger.getRetainedLogs();
@@ -317,7 +314,7 @@ describe("SPEC 07 — Functional Tests (07.T.1 – 07.T.19)", () => {
     expect(fs.existsSync(dashDir)).toBe(true);
 
     const dashboards = fs.readdirSync(dashDir).filter((f) => f.endsWith(".json"));
-    expect(dashboards.length).toBe(6);
+    expect(dashboards.length).toBe(4);
     for (const d of dashboards) {
       const content = fs.readFileSync(path.join(dashDir, d), "utf-8");
       const parsed = JSON.parse(content);
@@ -330,16 +327,16 @@ describe("SPEC 07 — Functional Tests (07.T.1 – 07.T.19)", () => {
     const originalDomainResult = {
       attack_id: "light_punch",
       startup_frames: 4,
-      verdict: "PASS",
+      analysis_status: "COMPLETED_CLEAN",
       damage: 15,
     };
 
     const copy = { ...originalDomainResult };
 
     // Record telemetry
-    adapter.recordMetric(GATE_METRICS.PASS_COUNT, 1);
+    adapter.recordMetric("combat_analysis_count", 1, { status: "COMPLETED_CLEAN" });
     adapter.emitLog({
-      event_name: "verification_executed",
+      event_name: "analysis_completed",
       details: copy,
     });
     const span = adapter.startSpan("domain_op");

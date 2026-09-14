@@ -16,10 +16,15 @@ async function setup(page: Page, request: APIRequestContext) {
   const response = await request.post('/api/workspaces', { headers: { Authorization: 'Bearer ' + user.access_token }, data: { name: 'Projeto de navegação', seed_demo_data: true } });
   expect(response.status()).toBe(201);
   const workspace = await response.json(); await session(page, user);
-  return { user, workspace, base: '/workspaces/' + workspace.id };
+  const charactersResponse = await request.get('/api/workspaces/' + workspace.id + '/characters', { headers: { Authorization: 'Bearer ' + user.access_token } });
+  expect(charactersResponse.status()).toBe(200);
+  const charactersPayload = await charactersResponse.json();
+  const firstCharacterId = charactersPayload.characters[0]?.id;
+  expect(firstCharacterId).toBeTruthy();
+  return { user, workspace, base: '/workspaces/' + workspace.id, firstCharacterId };
 }
 async function onePage(page: Page, name: string) { await expect(page.locator('[data-page]')).toHaveCount(1); await expect(page.locator('[data-page]')).toHaveAttribute('data-page', name); }
-const routes = [['', 'overview'], ['/characters', 'characters'], ['/characters/char_default', 'character-detail'], ['/attacks', 'attacks'], ['/combos', 'combos'], ['/analysis', 'analysis'], ['/simulation', 'simulation'], ['/director', 'director'], ['/import', 'import'], ['/help', 'help']] as const;
+const routes = [['', 'overview'], ['/characters', 'characters'], ['/characters/{characterId}', 'character-detail'], ['/attacks', 'attacks'], ['/combos', 'combos'], ['/analysis', 'analysis'], ['/simulation', 'simulation'], ['/director', 'director'], ['/import', 'import'], ['/help', 'help']] as const;
 test('public routes are exclusive and browser history works', async ({ page }) => {
   await page.goto('/'); await onePage(page, 'landing');
   await page.getByRole('link', { name: 'Entrar', exact: true }).first().click(); await onePage(page, 'login');
@@ -45,8 +50,9 @@ test('register establishes session and routes to dashboard', async ({ page }) =>
   await expect(page).toHaveURL(/\/workspaces$/); await onePage(page, 'dashboard');
 });
 for (const [suffix, name] of routes) test('deep link, reload, back, forward and new tab: ' + name, async ({ page, request, context }) => {
-  const { base } = await setup(page, request);
-  await page.goto('/'); await onePage(page, 'landing'); await page.goto(base + suffix); await onePage(page, name);
+  const { base, firstCharacterId } = await setup(page, request);
+  const concreteSuffix = suffix.replace('{characterId}', firstCharacterId);
+  await page.goto('/'); await onePage(page, 'landing'); await page.goto(base + concreteSuffix); await onePage(page, name);
   await page.reload(); await onePage(page, name);
   if (name !== 'character-detail') await expect(page.locator('.sidebar [aria-current="page"]')).toHaveCount(1);
   await page.goBack(); await onePage(page, 'landing'); await page.goForward(); await onePage(page, name);

@@ -60,7 +60,7 @@ function createMockPorts(overrides: Partial<ChatOrchestratorPorts> = {}): ChatOr
     analysisPort: {
       analyze: vi.fn().mockResolvedValue({ analysis_id: "an_sec", status: "COMPLETED", findings: [] }),
     } as any,
-    saveChangeset: vi.fn(),
+    saveProposal: vi.fn(),
     getWorkspaceRevision: vi.fn().mockReturnValue("rev-1"),
     ...overrides,
   };
@@ -353,13 +353,13 @@ describe("SPEC 13 — Security Test Suite (13.SEC.1 – 13.SEC.28)", () => {
     const mockLlm: LlmProvider = {
       chat: vi.fn().mockResolvedValue({
         text: null,
-        function_calls: [{ name: "combat_propose_change", args: { mutations: [] } }],
+        function_calls: [{ name: "combat_create_proposal", args: { mutations: [] } }],
         finished: false,
       }),
     };
 
     const orchestrator = new ChatOrchestrator(mockLlm, ports);
-    // explain_simulation skill does not allow combat_propose_change
+    // explain_simulation skill does not allow combat_create_proposal
     const res = await orchestrator.processMessage({
       workspace_id: workspaceId,
       skill_id: "explain_simulation",
@@ -369,7 +369,7 @@ describe("SPEC 13 — Security Test Suite (13.SEC.1 – 13.SEC.28)", () => {
       timestamp: new Date().toISOString(),
     });
 
-    expect(res.tool_calls[0].tool_id).toBe("combat_propose_change");
+    expect(res.tool_calls[0].tool_id).toBe("combat_create_proposal");
     expect((res.tool_calls[0].output as any).error).toContain("TOOL_DENIED");
   });
 
@@ -503,7 +503,7 @@ describe("SPEC 13 — Security Test Suite (13.SEC.1 – 13.SEC.28)", () => {
   it("13.SEC.23: Client-supplied workspace_id alone does not bypass tool authorization", () => {
     const registry = new SkillRegistry();
     // Even if client specifies arbitrary workspace, tool allowlist is enforced
-    expect(registry.isToolAllowed("explain_simulation", "combat_propose_change")).toBe(false);
+    expect(registry.isToolAllowed("explain_simulation", "combat_create_proposal")).toBe(false);
   });
 
   // 13.SEC.24 — Malicious delimiter escape remains untrusted data

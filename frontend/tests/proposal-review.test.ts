@@ -17,7 +17,7 @@ describe("SPEC 10 — Suggested Adjustment & Proposal Review UI (10.UI.6 - 10.UI
           base_revision: "rev-1",
           target_revision: "rev-2",
           proposed_by: "director_llm",
-          status: "proposed",
+          status: "ACTIVE",
           mutations: [
             {
               type: "attack_damage",
@@ -61,7 +61,7 @@ describe("SPEC 10 — Suggested Adjustment & Proposal Review UI (10.UI.6 - 10.UI
         id: "prop_1",
         proposal_id: "prop_1",
         workspace_id: workspaceId,
-        status: "withdrawn",
+        status: "WITHDRAWN",
         target_revision: "rev-2",
         mutations: [],
         created_at: new Date().toISOString(),
@@ -76,7 +76,7 @@ describe("SPEC 10 — Suggested Adjustment & Proposal Review UI (10.UI.6 - 10.UI
           id: "prop_1",
           proposal_id: "prop_1",
           workspace_id: workspaceId,
-          status: "proposed",
+          status: "ACTIVE",
           target_revision: "rev-2",
           mutations: [],
           created_at: new Date().toISOString(),
@@ -85,11 +85,11 @@ describe("SPEC 10 — Suggested Adjustment & Proposal Review UI (10.UI.6 - 10.UI
     });
 
     review.selectProposal("prop_1");
-    expect(review.getSelectedProposal()?.status).toBe("proposed");
+    expect(review.getSelectedProposal()?.status).toBe("ACTIVE");
 
     // Withdraw
     const withdrawn = await review.withdrawProposal("prop_1", "Testing withdrawal");
-    expect(withdrawn.status).toBe("withdrawn");
+    expect(withdrawn.status).toBe("WITHDRAWN");
     expect(mockApiClient.withdrawProposal).toHaveBeenCalledWith(workspaceId, "prop_1", "Testing withdrawal");
   });
 });

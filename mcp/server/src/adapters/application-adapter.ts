@@ -2,7 +2,7 @@ import type {
   SimulationPort,
   CombatAnalysisPort,
   CombatQueryPort,
-  ChangeSetRepositoryPort,
+  ProposalRepositoryPort,
   AttackSummary,
   ImpactAnalysisResult,
   ProvenanceInfo,
@@ -13,9 +13,9 @@ import {
   getAttackUseCase,
   simulateCombatUseCase,
   analyzeCombatUseCase,
-  proposeChangesetUseCase,
-  getChangesetUseCase,
-  withdrawChangesetUseCase,
+  createProposalUseCase,
+  getProposalUseCase,
+  withdrawProposalUseCase,
 } from "@combat-designer/backend";
 import type {
   Principal,
@@ -23,15 +23,15 @@ import type {
   SimulationOutput,
   VerificationRequest,
   CombatAnalysisResult,
-  ChangeSetProposal,
-  ChangeSetMutation,
+  Proposal,
+  ProposalMutation,
 } from "@combat-designer/backend";
 
 export interface ApplicationPortsBundle {
   simulationPort: SimulationPort;
   analysisPort: CombatAnalysisPort;
   queryPort: CombatQueryPort;
-  changesetRepo: ChangeSetRepositoryPort;
+  proposalRepo: ProposalRepositoryPort;
 }
 
 export class ApplicationAdapter {
@@ -71,15 +71,15 @@ export class ApplicationAdapter {
     return await analyzeCombatUseCase(this.ports.analysisPort, this.ports.simulationPort, request, precomputedSimulation);
   }
 
-  async proposeChangeset(
+  async createProposal(
     workspaceId: string,
     baseRevision: string,
     targetRevision: string,
     proposedBy: string,
-    mutations: ChangeSetMutation[],
+    mutations: ProposalMutation[],
     idempotencyKey?: string
-  ): Promise<ChangeSetProposal> {
-    return await proposeChangesetUseCase(this.ports.changesetRepo, {
+  ): Promise<Proposal> {
+    return await createProposalUseCase(this.ports.proposalRepo, {
       workspace_id: workspaceId,
       base_revision: baseRevision,
       target_revision: targetRevision,
@@ -89,11 +89,11 @@ export class ApplicationAdapter {
     });
   }
 
-  async getChangeset(workspaceId: string, changesetId: string): Promise<ChangeSetProposal | null> {
-    return await getChangesetUseCase(this.ports.changesetRepo, workspaceId, changesetId);
+  async getProposal(workspaceId: string, proposalId: string): Promise<Proposal | null> {
+    return await getProposalUseCase(this.ports.proposalRepo, workspaceId, proposalId);
   }
 
-  async withdrawChangeset(workspaceId: string, changesetId: string, reason: string): Promise<ChangeSetProposal> {
-    return await withdrawChangesetUseCase(this.ports.changesetRepo, workspaceId, changesetId, reason);
+  async withdrawProposal(workspaceId: string, proposalId: string, reason: string): Promise<Proposal> {
+    return await withdrawProposalUseCase(this.ports.proposalRepo, workspaceId, proposalId, reason);
   }
 }

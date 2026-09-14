@@ -20,7 +20,7 @@ export type ResourceEnvelope = z.infer<typeof ResourceEnvelopeSchema>;
 
 export interface ParsedResourceUri {
   workspace_id: string;
-  resource_type: "attacks" | "archetypes" | "graph" | "verification" | "provenance";
+  resource_type: "attacks" | "archetypes" | "graph" | "analysis" | "provenance";
   resource_id: string;
 }
 
@@ -43,7 +43,7 @@ export function parseResourceUri(uri: string): ParsedResourceUri {
   }
 
   const [workspace_id, type, resource_id] = parts;
-  const validTypes = ["attacks", "archetypes", "graph", "verification", "provenance"] as const;
+  const validTypes = ["attacks", "archetypes", "graph", "analysis", "provenance"] as const;
   if (!validTypes.includes(type as (typeof validTypes)[number])) {
     throw new Error(`Invalid resource type: '${type}'. Expected one of: ${validTypes.join(", ")}`);
   }

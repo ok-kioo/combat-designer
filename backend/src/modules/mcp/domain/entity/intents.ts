@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ChangeSetMutationSchema } from "./changeset.js";
+import { ProposalMutationSchema } from "./proposal.js";
 
 export const SearchIntentSchema = z.object({
   type: z.literal("search"),
@@ -35,7 +35,7 @@ export const ChangeProposalIntentSchema = z.object({
   workspace_id: z.string().min(1),
   base_revision: z.string().min(1),
   target_revision: z.string().min(1),
-  mutations: z.array(ChangeSetMutationSchema).min(1),
+  mutations: z.array(ProposalMutationSchema).min(1),
   reason: z.string().min(1),
   expected_effect: z.string().min(1),
   idempotency_key: z.string().optional(),
@@ -45,7 +45,7 @@ export type ChangeProposalIntent = z.infer<typeof ChangeProposalIntentSchema>;
 export const ApprovalIntentSchema = z.object({
   type: z.literal("approve"),
   workspace_id: z.string().min(1),
-  changeset_id: z.string().min(1),
+  proposal_id: z.string().min(1),
   human_approver_id: z.string().min(1),
   decision: z.enum(["approve", "reject"]),
   reason: z.string().optional(),

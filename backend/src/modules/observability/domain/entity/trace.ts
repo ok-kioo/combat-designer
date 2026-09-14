@@ -49,7 +49,7 @@ export interface CorrelationContext {
   use_case?: string;
   simulation_id?: string;
   gate_run_id?: string;
-  changeset_id?: string;
+  proposal_id?: string;
 }
 
 export const CorrelationContextSchema = z.object({
@@ -61,7 +61,7 @@ export const CorrelationContextSchema = z.object({
   use_case: z.string().optional(),
   simulation_id: z.string().optional(),
   gate_run_id: z.string().optional(),
-  changeset_id: z.string().optional(),
+  proposal_id: z.string().optional(),
 });
 
 /**

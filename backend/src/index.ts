@@ -3,9 +3,10 @@ export * from "./modules/combat/domain/entity/index.js";
 export * from "./modules/combat/domain/repository/index.js";
 export * from "./modules/combat/service/index.js";
 
-// Changeset Domain
-export * from "./modules/changeset/domain/repository/index.js";
-export * from "./modules/changeset/service/index.js";
+// Proposal Domain
+export * from "./modules/proposal/domain/entity/index.js";
+export * from "./modules/proposal/domain/repository/index.js";
+export * from "./modules/proposal/service/index.js";
 
 // FIC Governance
 export * from "./modules/fic/domain/entity/index.js";
@@ -84,6 +85,7 @@ export {
 export * from "./infrastructure/provider/observability/index.js";
 export * from "./infrastructure/provider/auth/in-memory-auth-repository.js";
 export * from "./infrastructure/provider/chat/sqlite-chat-repository.js";
+export * from "./infrastructure/provider/postgres/index.js";
 export type { ChatRepositoryPort } from "./modules/llm/domain/repository/chat-repository-port.js";
 
 // Infrastructure HTTP

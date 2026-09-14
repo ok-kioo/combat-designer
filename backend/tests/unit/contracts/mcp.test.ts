@@ -2,8 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   PrincipalSchema,
   CapabilitySchema,
-  ChangeSetProposalSchema,
-  ChangeSetMutationSchema,
   CombatSearchInputSchema,
   CombatSimulateInputSchema,
   CombatAnalyzeInputSchema,
@@ -16,6 +14,7 @@ import {
   redactSensitiveData,
   MCP_CONTRACT_VERSION,
 } from "../../../src/modules/mcp/domain/entity/index.js";
+import { ProposalSchema, ProposalMutationSchema } from "../../../src/modules/proposal/domain/entity/index.js";
 
 describe("MCP Shared Contracts", () => {
   it("verifies MCP contract version is explicitly declared", () => {
@@ -26,7 +25,7 @@ describe("MCP Shared Contracts", () => {
     const validPrincipal = {
       principal_id: "designer-1",
       principal_type: "human",
-      capabilities: ["combat:read", "changeset:apply"],
+      capabilities: ["combat:read", "proposal:withdraw"],
       authorized_workspaces: ["ws-default"],
     };
     const parsed = PrincipalSchema.parse(validPrincipal);
@@ -49,13 +48,14 @@ describe("MCP Shared Contracts", () => {
     ).toThrow();
   });
 
-  it("ensures changeset:approve is distinct from changeset:apply", () => {
-    const approveCap = CapabilitySchema.parse("changeset:approve");
-    const applyCap = CapabilitySchema.parse("changeset:apply");
-    expect(approveCap).not.toBe(applyCap);
+  it("ensures proposal capabilities are consultative", () => {
+    const withdrawCap = CapabilitySchema.parse("proposal:withdraw");
+    expect(withdrawCap).toBe("proposal:withdraw");
+    expect(() => CapabilitySchema.parse("proposal:approve")).toThrow();
+    expect(() => CapabilitySchema.parse("proposal:apply")).toThrow();
   });
 
-  it("validates ChangeSet discriminated mutations and proposal schema", () => {
+  it("validates Proposal discriminated mutations and proposal schema", () => {
     const mutation = {
       type: "attack_damage",
       attack_id: "atk_light_punch",
@@ -63,29 +63,29 @@ describe("MCP Shared Contracts", () => {
       proposed_damage: 25,
       reason: "Buff light attack damage",
     };
-    const parsedMutation = ChangeSetMutationSchema.parse(mutation);
+    const parsedMutation = ProposalMutationSchema.parse(mutation);
     expect(parsedMutation.type).toBe("attack_damage");
 
     const proposal = {
-      changeset_id: "cs-101",
+      proposal_id: "prop-101",
       workspace_id: "ws-1",
       base_revision: "rev-1",
       target_revision: "rev-2",
       proposed_by: "llm-agent-1",
-      status: "proposed",
+      status: "ACTIVE",
       mutations: [parsedMutation],
       created_at: new Date().toISOString(),
     };
-    const parsedProposal = ChangeSetProposalSchema.parse(proposal);
-    expect(parsedProposal.status).toBe("proposed");
+    const parsedProposal = ProposalSchema.parse(proposal);
+    expect(parsedProposal.status).toBe("ACTIVE");
   });
 
   it("resolves tool aliases to canonical tool names", () => {
     expect(resolveCanonicalToolName("query_combat")).toBe("combat_search");
-    expect(resolveCanonicalToolName("simulate_changeset")).toBe("combat_simulate");
+    expect(resolveCanonicalToolName("simulate_proposal")).toBe("combat_simulate");
     expect(resolveCanonicalToolName("analyze_combat")).toBe("combat_analyze");
-    expect(resolveCanonicalToolName("propose_changeset")).toBe("combat_propose_change");
-    expect(resolveCanonicalToolName("withdraw_changeset")).toBe("combat_withdraw_change");
+    expect(resolveCanonicalToolName("create_proposal")).toBe("combat_create_proposal");
+    expect(resolveCanonicalToolName("withdraw_proposal")).toBe("combat_withdraw_proposal");
     expect(resolveCanonicalToolName("combat_search")).toBe("combat_search");
   });
 

@@ -3,7 +3,9 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "bundler",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
@@ -19,5 +21,12 @@
     "gateway/src/**/*",
     "server/src/**/*"
   ],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "tests/**/*", "gateway/tests/**/*", "server/tests/**/*"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "tests/**/*",
+    "gateway/tests/**/*",
+    "server/tests/**/*"
+  ]
 }

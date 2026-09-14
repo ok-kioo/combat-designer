@@ -138,7 +138,7 @@ admin:*               DENY
 
 > [!WARNING]
 > **Ferramentas Legadas Desconectadas (`MUST_REMOVE_NOW`)**:
-> As ferramentas `run_gate`, `explain_gate`, `combat_verify`, `combat_explain_gate`, `combat_apply_change` e `propose_changeset` pertenciam ao fluxo descontinuado de mutação de engine e foram removidas do catálogo ativo.
+> As ferramentas `run_gate`, `explain_gate`, `combat_verify`, `combat_explain_gate`, `combat_apply_change` e `create_proposal` pertenciam ao fluxo descontinuado de mutação de engine e foram removidas do catálogo ativo.
 
 ---
 

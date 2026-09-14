@@ -83,7 +83,7 @@ function createMockPorts(overrides: Partial<ChatOrchestratorPorts> = {}): ChatOr
         analyzed_at: new Date().toISOString(),
       }),
     } as any,
-    saveChangeset: vi.fn(),
+    saveProposal: vi.fn(),
     getWorkspaceRevision: vi.fn().mockReturnValue("rev-1"),
     ...overrides,
   };
@@ -312,7 +312,7 @@ describe("SPEC 13 — Functional Test Suite (13.T.1 – 13.T.20)", () => {
   });
 
   // 13.T.11 — Proposal generation
-  it("13.T.11: Generates proposed ChangeSet with status PROPOSED without modifying engine", async () => {
+  it("13.T.11: Generates proposed Proposal with status ACTIVE without modifying engine", async () => {
     const ports = createMockPorts();
     const mockLlm: LlmProvider = {
       chat: vi.fn().mockImplementation(async ({ tool_results }) => {
@@ -321,7 +321,7 @@ describe("SPEC 13 — Functional Test Suite (13.T.1 – 13.T.20)", () => {
             text: null,
             function_calls: [
               {
-                name: "combat_propose_change",
+                name: "combat_create_proposal",
                 args: {
                   mutations: [{ type: "attack_damage", attack_id: "atk_punch", proposed_damage: 35 }],
                 },
@@ -343,10 +343,10 @@ describe("SPEC 13 — Functional Test Suite (13.T.1 – 13.T.20)", () => {
       timestamp: new Date().toISOString(),
     });
 
-    expect(ports.saveChangeset).toHaveBeenCalledTimes(1);
-    expect(res.proposed_changeset).toBeDefined();
-    expect(res.proposed_changeset?.status).toBe("proposed");
-    expect((res.tool_calls[0].output as any).status).toBe("PROPOSED");
+    expect(ports.saveProposal).toHaveBeenCalledTimes(1);
+    expect(res.proposed_proposal).toBeDefined();
+    expect(res.proposed_proposal?.status).toBe("ACTIVE");
+    expect((res.tool_calls[0].output as any).status).toBe("ACTIVE");
   });
 
   // 13.T.12 — Combat Analysis integration
@@ -379,10 +379,10 @@ describe("SPEC 13 — Functional Test Suite (13.T.1 – 13.T.20)", () => {
   });
 
   // 13.T.13 — Spec Validator integration
-  it("13.T.13: Validates ChangeSet proposals against project specs (Spec Validator)", () => {
+  it("13.T.13: Validates Proposal proposals against project specs (Spec Validator)", () => {
     const validator = new SpecValidator();
     const validProposal: any = {
-      changeset_id: "cs_val_1",
+      proposal_id: "prop_val_1",
       mutations: [{ type: "attack_damage", attack_id: "atk_kick", proposed_damage: 50 }],
     };
     const validResult = validator.validate(validProposal);
@@ -390,7 +390,7 @@ describe("SPEC 13 — Functional Test Suite (13.T.1 – 13.T.20)", () => {
     expect(validResult.violations).toHaveLength(0);
 
     const invalidProposal: any = {
-      changeset_id: "cs_val_2",
+      proposal_id: "prop_val_2",
       mutations: [{ type: "attack_damage", attack_id: "atk_kick", proposed_damage: -10 }],
     };
     const invalidResult = validator.validate(invalidProposal);
@@ -463,7 +463,7 @@ describe("SPEC 13 — Functional Test Suite (13.T.1 – 13.T.20)", () => {
     const skill = registry.getSkill("analyze_attack");
 
     expect(skill?.allowed_tools).toContain("combat_search");
-    expect(skill?.allowed_tools).not.toContain("combat_propose_change");
+    expect(skill?.allowed_tools).not.toContain("combat_create_proposal");
   });
 
   // 13.T.18 — PublicActivity emission without tool internals

@@ -15,7 +15,7 @@ export const CheckStatusSchema = z.enum([
 export type CheckStatus = z.infer<typeof CheckStatusSchema>;
 
 /**
- * VerificationProfileKind defines strictness levels for the Mechanical Gate.
+ * VerificationProfileKind defines strictness levels for combat diagnostics.
  */
 export const VerificationProfileKindSchema = z.enum([
   "strict",
@@ -134,7 +134,7 @@ export type CheckResult = z.infer<typeof CheckResultSchema>;
 
 
 /**
- * Request DTO submitted to the Mechanical Gate Port.
+ * Request DTO submitted to the combat analysis port.
  */
 export const VerificationRequestSchema = z.object({
   workspace_id: z.string().min(1, "workspace_id is strictly required"),

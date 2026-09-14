@@ -117,4 +117,4 @@ Developer / Coding Agent
 ## 4. Code Divergence Registry (`MUST_REMOVE_NOW`)
 
 > [!WARNING]
-> O módulo histórico `engine/src/verification` e os use cases `apply-changeset.ts` / `approve-changeset.ts` implementavam aprovação de runtime com `MechanicalGatePort` e `GateResult`. Esses componentes foram classificados como `CODE_LEGACY_RUNTIME_GATE` (`MUST_REMOVE_NOW`) e desconectados do pipeline canônico de produto.
+> O módulo histórico `engine/src/verification` e os use cases `apply-proposal.ts` / `approve-proposal.ts` implementavam aprovação de runtime com `MechanicalGatePort` e `GateResult`. Esses componentes foram classificados como `CODE_LEGACY_RUNTIME_GATE` (`MUST_REMOVE_NOW`) e desconectados do pipeline canônico de produto.

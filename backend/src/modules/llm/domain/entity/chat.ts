@@ -103,7 +103,7 @@ export interface ChatResponse {
     code: PublicChatErrorCode;
     message: string;
   };
-  proposed_changeset?: unknown;
+  proposed_proposal?: unknown;
 }
 
 export const DEFAULT_OUT_OF_SCOPE_MESSAGE =

@@ -6,8 +6,7 @@ import {
   API_METRICS,
   GATEWAY_METRICS,
   SIMULATION_METRICS,
-  GATE_METRICS,
-  CHANGESET_METRICS,
+  PROPOSAL_METRICS,
   sanitizeMetricLabels,
 } from "./metric-definitions.js";
 
@@ -62,24 +61,10 @@ export class NativeMetricsRegistry {
     this.upDownCounters.set(SIMULATION_METRICS.FRAMES_TOTAL, this.meter.createUpDownCounter(SIMULATION_METRICS.FRAMES_TOTAL, { description: "Simulation frames computed" }));
     this.upDownCounters.set(SIMULATION_METRICS.EVENTS_TOTAL, this.meter.createUpDownCounter(SIMULATION_METRICS.EVENTS_TOTAL, { description: "Simulation events emitted" }));
 
-    // Mechanical Gate
-    this.counters.set(GATE_METRICS.RUN_COUNT, this.meter.createCounter(GATE_METRICS.RUN_COUNT, { description: "Mechanical Gate runs" }));
-    this.counters.set(GATE_METRICS.PASS_COUNT, this.meter.createCounter(GATE_METRICS.PASS_COUNT, { description: "Gate PASS verdicts" }));
-    this.counters.set(GATE_METRICS.FAIL_COUNT, this.meter.createCounter(GATE_METRICS.FAIL_COUNT, { description: "Gate FAIL verdicts" }));
-    this.counters.set(GATE_METRICS.BLOCKED_COUNT, this.meter.createCounter(GATE_METRICS.BLOCKED_COUNT, { description: "Gate BLOCKED verdicts" }));
-    this.counters.set(GATE_METRICS.STALE_COUNT, this.meter.createCounter(GATE_METRICS.STALE_COUNT, { description: "Gate STALE verdicts" }));
-    this.counters.set(GATE_METRICS.BUDGET_EXCEEDED_COUNT, this.meter.createCounter(GATE_METRICS.BUDGET_EXCEEDED_COUNT, { description: "Gate budget exhaustions" }));
-    this.counters.set(GATE_METRICS.ERROR_COUNT, this.meter.createCounter(GATE_METRICS.ERROR_COUNT, { description: "Gate execution errors" }));
-    this.histograms.set(GATE_METRICS.DURATION_MS, this.meter.createHistogram(GATE_METRICS.DURATION_MS, { description: "Gate evaluation duration in ms", unit: "ms" }));
-
-    // ChangeSets
-    this.counters.set(CHANGESET_METRICS.PROPOSED_COUNT, this.meter.createCounter(CHANGESET_METRICS.PROPOSED_COUNT, { description: "ChangeSets proposed" }));
-    this.counters.set(CHANGESET_METRICS.SIMULATED_COUNT, this.meter.createCounter(CHANGESET_METRICS.SIMULATED_COUNT, { description: "ChangeSets simulated" }));
-    this.counters.set(CHANGESET_METRICS.VERIFIED_COUNT, this.meter.createCounter(CHANGESET_METRICS.VERIFIED_COUNT, { description: "ChangeSets verified" }));
-    this.counters.set(CHANGESET_METRICS.APPROVED_COUNT, this.meter.createCounter(CHANGESET_METRICS.APPROVED_COUNT, { description: "ChangeSets approved" }));
-    this.counters.set(CHANGESET_METRICS.APPLIED_COUNT, this.meter.createCounter(CHANGESET_METRICS.APPLIED_COUNT, { description: "ChangeSets applied" }));
-    this.counters.set(CHANGESET_METRICS.WITHDRAWN_COUNT, this.meter.createCounter(CHANGESET_METRICS.WITHDRAWN_COUNT, { description: "ChangeSets withdrawn" }));
-    this.counters.set(CHANGESET_METRICS.REJECTED_COUNT, this.meter.createCounter(CHANGESET_METRICS.REJECTED_COUNT, { description: "ChangeSets rejected" }));
+    // Proposals
+    this.counters.set(PROPOSAL_METRICS.CREATED_COUNT, this.meter.createCounter(PROPOSAL_METRICS.CREATED_COUNT, { description: "Consultative proposals created" }));
+    this.counters.set(PROPOSAL_METRICS.WITHDRAWN_COUNT, this.meter.createCounter(PROPOSAL_METRICS.WITHDRAWN_COUNT, { description: "Proposals withdrawn" }));
+    this.counters.set(PROPOSAL_METRICS.ARCHIVED_COUNT, this.meter.createCounter(PROPOSAL_METRICS.ARCHIVED_COUNT, { description: "Proposals archived" }));
   }
 
   /**

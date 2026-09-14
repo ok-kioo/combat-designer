@@ -192,8 +192,8 @@ describe("SPEC 10 — Frontend REST Routes Integration Tests (10.T.1 - 10.T.10)"
     expect(state.history.some((h) => h.type === "analysis")).toBe(true);
   });
 
-  it("10.T.5: POST /changesets proposes and GET /changesets lists proposals", async () => {
-    const createRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets`, {
+  it("10.T.5: POST /proposals creates a consultative proposal and GET /proposals lists it", async () => {
+    const createRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/proposals`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -215,25 +215,25 @@ describe("SPEC 10 — Frontend REST Routes Integration Tests (10.T.1 - 10.T.10)"
     });
     expect(createRes.status).toBe(201);
     const created = await createRes.json();
-    expect(created.status).toBe("PROPOSED");
-    const csId = created.changeset.changeset_id;
+    expect(created.status).toBe("ACTIVE");
+    const proposalId = created.proposal.proposal_id;
 
-    const listRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets`, {
+    const listRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/proposals`, {
       headers: { "x-authorized-workspaces": workspaceId },
     });
     const list = await listRes.json();
     expect(list.count).toBe(1);
-    expect(list.changesets[0].changeset_id).toBe(csId);
+    expect(list.proposals[0].proposal_id).toBe(proposalId);
 
-    const getRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets/${csId}`, {
+    const getRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/proposals/${proposalId}`, {
       headers: { "x-authorized-workspaces": workspaceId },
     });
     const single = await getRes.json();
-    expect(single.changeset.changeset_id).toBe(csId);
+    expect(single.proposal.proposal_id).toBe(proposalId);
   });
 
-  it("10.T.6: Disallows direct runtime mutations on changesets", async () => {
-    const res = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets/cs_any/mutate`, {
+  it("10.T.6: Disallows direct runtime mutations on proposals", async () => {
+    const res = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/proposals/prop_any/mutate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -244,40 +244,40 @@ describe("SPEC 10 — Frontend REST Routes Integration Tests (10.T.1 - 10.T.10)"
     expect(res.status).toBe(404);
   });
 
-  it("10.T.7: Proposes changeset as purely consultative record", async () => {
+  it("10.T.7: Proposal remains a purely consultative record", async () => {
     const cs = {
-      changeset_id: "cs_consultative",
+      proposal_id: "prop_consultative",
       workspace_id: workspaceId,
       base_revision: "rev-01",
       target_revision: "rev-02",
       proposed_by: "designer",
-      status: "proposed" as const,
+      status: "ACTIVE" as const,
       mutations: [],
       created_at: new Date().toISOString(),
     };
-    server.saveChangeset(cs);
+    server.saveProposal(cs);
 
-    const getRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets/cs_consultative`, {
+    const getRes = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/proposals/prop_consultative`, {
       headers: { "x-authorized-workspaces": workspaceId },
     });
     expect(getRes.status).toBe(200);
     const body = await getRes.json();
-    expect(body.changeset.status).toBe("proposed");
+    expect(body.proposal.status).toBe("ACTIVE");
   });
 
-  it("10.T.8: POST /changesets/:id/withdraw withdraws proposal", async () => {
-    server.saveChangeset({
-      changeset_id: "cs_to_withdraw",
+  it("10.T.8: POST /proposals/:id/withdraw withdraws proposal", async () => {
+    server.saveProposal({
+      proposal_id: "prop_to_withdraw",
       workspace_id: workspaceId,
       base_revision: "rev-01",
       target_revision: "rev-02",
       proposed_by: "designer",
-      status: "proposed",
+      status: "ACTIVE",
       mutations: [],
       created_at: new Date().toISOString(),
     });
 
-    const res = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets/cs_to_withdraw/withdraw`, {
+    const res = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/proposals/prop_to_withdraw/withdraw`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -288,7 +288,7 @@ describe("SPEC 10 — Frontend REST Routes Integration Tests (10.T.1 - 10.T.10)"
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.status).toBe("WITHDRAWN");
-    expect(body.changeset.status).toBe("withdrawn");
+    expect(body.proposal.status).toBe("WITHDRAWN");
   });
 
   it("10.T.9: POST /chat accepts LlmPromptContextEnvelope and returns structured director response", async () => {
@@ -308,12 +308,12 @@ describe("SPEC 10 — Frontend REST Routes Integration Tests (10.T.1 - 10.T.10)"
     });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.reply).toContain("changeset proposal");
+    expect(body.reply).toContain("suggested adjustment proposal");
     expect(body.tool_calls.length).toBe(1);
-    expect(body.tool_calls[0].tool_id).toBe("combat_propose_change");
+    expect(body.tool_calls[0].tool_id).toBe("combat_create_proposal");
     expect(body.tool_calls[0].untrusted_text).toBe(true);
-    expect(body.proposed_changeset).toBeDefined();
-    expect(body.proposed_changeset.mutations[0].proposed_damage).toBe(35);
+    expect(body.proposed_proposal).toBeDefined();
+    expect(body.proposed_proposal.mutations[0].proposed_damage).toBe(35);
     expect(body.context_envelope.selected_attack_ids).toContain("atk_light_punch");
   });
 
@@ -330,7 +330,7 @@ describe("SPEC 10 — Frontend REST Routes Integration Tests (10.T.1 - 10.T.10)"
     });
     expect(r2.status).toBe(403);
 
-    const r3 = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/changesets`, { headers: forbiddenHeaders });
+    const r3 = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/proposals`, { headers: forbiddenHeaders });
     expect(r3.status).toBe(403);
 
     const r4 = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/chat`, {

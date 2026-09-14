@@ -5,7 +5,7 @@ import { SimulationWorkbenchController, type SimulationWorkbenchProps } from "..
 import { ProposalReviewController, type ProposalReviewProps } from "../../proposal-review/components/ProposalReview.js";
 import { ApiClient, defaultApiClient } from "../../../shared/services/api-client.js";
 
-export type ActiveExplorerTab = "explorer" | "catalog" | "workbench" | "proposals" | "changesets";
+export type ActiveExplorerTab = "explorer" | "catalog" | "workbench" | "proposals";
 
 export interface CombatExplorerConfig {
   workspaceId: string;
@@ -16,8 +16,6 @@ export interface CombatExplorerConfig {
   catalogProps?: Partial<AttackCatalogProps>;
   workbenchProps?: Partial<SimulationWorkbenchProps>;
   proposalReviewProps?: Partial<ProposalReviewProps>;
-  // CODE_LEGACY_PRODUCT_DIRECTION
-  changesetReviewProps?: Partial<ProposalReviewProps>;
 }
 
 export class CombatExplorerController {
@@ -30,11 +28,6 @@ export class CombatExplorerController {
   public readonly catalog: AttackCatalogController;
   public readonly workbench: SimulationWorkbenchController;
   public readonly proposalReview: ProposalReviewController;
-
-  // CODE_LEGACY_PRODUCT_DIRECTION: Backward compatibility alias
-  public get changesetReview(): ProposalReviewController {
-    return this.proposalReview;
-  }
 
   constructor(config: CombatExplorerConfig) {
     this.workspaceId = config.workspaceId;
@@ -71,7 +64,6 @@ export class CombatExplorerController {
       workspaceId: config.workspaceId,
       apiClient: this.apiClient,
       ...config.proposalReviewProps,
-      ...config.changesetReviewProps,
     });
   }
 
@@ -128,8 +120,8 @@ export class CombatExplorerController {
       leftContentHtml = this.catalog.renderHtml();
     } else if (layout.activeTab === "workbench") {
       leftContentHtml = this.workbench.renderHtml();
-    } else if (layout.activeTab === "changesets") {
-      leftContentHtml = this.changesetReview.renderHtml();
+    } else if (layout.activeTab === "proposals") {
+      leftContentHtml = this.proposalReview.renderHtml();
     }
 
     const rightContentHtml = this.directorChat.renderHtml();

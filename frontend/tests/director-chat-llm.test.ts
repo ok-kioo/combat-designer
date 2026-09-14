@@ -13,14 +13,14 @@ describe("SPEC 10 — Director Chat & Structured LLM Input (10.UI.8)", () => {
       reply: "I propose increasing Light Punch damage from 25 to 35.",
       tool_calls: [
         {
-          tool_id: "combat_propose_change",
+          tool_id: "combat_create_proposal",
           input: { workspace_id: workspaceId, mutations: [] },
-          output: { status: "PROPOSED", changeset_id: "cs_123" },
+          output: { status: "ACTIVE", proposal_id: "prop_123" },
           untrusted_text: true,
         },
       ],
-      proposed_changeset: {
-        changeset_id: "cs_123",
+      proposed_proposal: {
+        proposal_id: "prop_123",
         target_revision: "rev-2",
         mutations: [
           {
@@ -60,7 +60,7 @@ describe("SPEC 10 — Director Chat & Structured LLM Input (10.UI.8)", () => {
     expect(mockApiClient.sendChatMessage).toHaveBeenCalledWith(workspaceId, "Buff light punch", {
       snapshot_hash: "snap_hash_999",
       selected_attack_ids: ["atk_light_punch"],
-      active_changeset_id: undefined,
+      active_proposal_id: undefined,
     });
 
     const model = chat.renderModel();
@@ -69,12 +69,12 @@ describe("SPEC 10 — Director Chat & Structured LLM Input (10.UI.8)", () => {
     expect(lastMsg.role).toBe("assistant");
     expect(lastMsg.toolCalls?.length).toBe(1);
     expect(lastMsg.toolCalls?.[0].untrusted_text).toBe(true);
-    expect(lastMsg.proposedChangeset?.changeset_id).toBe("cs_123");
+    expect(lastMsg.proposedProposal?.proposal_id).toBe("prop_123");
 
     const html = chat.renderHtml();
-    expect(html).toContain("combat_propose_change");
+    expect(html).toContain("combat_create_proposal");
     expect(html).toContain("untrusted_text");
-    expect(html).toContain("cs_123");
+    expect(html).toContain("prop_123");
     expect(html).toContain("Review Diff →");
   });
 

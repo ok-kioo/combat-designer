@@ -78,8 +78,8 @@ export function getCombatToolDeclarations(workspaceId: string): LlmToolDeclarati
       },
     },
     {
-      name: "combat_propose_change",
-      description: `Propose a ChangeSet with mutations to attack parameters in workspace '${workspaceId}'. Creates a proposal that can be reviewed and validated. You may ONLY propose — you cannot alter the engine.`,
+      name: "combat_create_proposal",
+      description: `Propose a Proposal with mutations to attack parameters in workspace '${workspaceId}'. Creates a proposal that can be reviewed and validated. You may ONLY propose — you cannot alter the engine.`,
       parameters: {
         type: "object",
         properties: {

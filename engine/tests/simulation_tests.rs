@@ -14,6 +14,7 @@ fn valid_provenance() -> Provenance {
     .expect("valid provenance")
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_test_attack(
     id_str: &str,
     startup: u32,

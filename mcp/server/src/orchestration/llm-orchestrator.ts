@@ -80,7 +80,7 @@ export class LlmOrchestrator {
           }
         }
 
-        return await this.gateway.execute(principal, "combat_propose_change", {
+        return await this.gateway.execute(principal, "combat_create_proposal", {
           workspace_id: intent.workspace_id,
           base_revision: intent.base_revision,
           target_revision: intent.target_revision,
@@ -94,12 +94,12 @@ export class LlmOrchestrator {
         if (principal.principal_type !== "human") {
           throw new McpError(
             "HUMAN_APPROVAL_REQUIRED",
-            "Fabricated approval rejected: LLM cannot approve changesets. Human approval is strictly required."
+            "Fabricated approval rejected: LLM cannot approve proposals. Human approval is strictly required."
           );
         }
         throw new McpError(
           "INVALID_REQUEST",
-          "Approval must be performed through verified gate workflow."
+          "Approval/application is not exposed through MCP runtime. Create consultative proposals and let the product workflow handle human decisions."
         );
       }
 

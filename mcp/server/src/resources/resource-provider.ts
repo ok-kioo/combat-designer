@@ -60,16 +60,16 @@ export class ResourceProvider {
         };
       }
 
-      case "verification": {
+      case "analysis": {
         return {
           uri,
-          classification: "SIMULATION_RESULT",
+          classification: "INFERENCE",
           data: {
-            gate_run_id: parsed.resource_id,
+            analysis_id: parsed.resource_id,
             workspace_id: parsed.workspace_id,
           },
           untrusted_text: false,
-          source: "combat_designer_verification",
+          source: "combat_designer_analysis",
         };
       }
 

@@ -7,7 +7,7 @@
  * Invariant: The LLM may explain violations, but CANNOT unilaterally declare spec compliance.
  */
 
-import type { ChangeSetProposal, ChangeSetMutation } from "../../changeset/domain/entity/index.js";
+import type { Proposal, ProposalMutation } from "../../proposal/domain/entity/index.js";
 
 export interface SpecViolation {
   spec_id: string;
@@ -30,7 +30,7 @@ export interface SpecValidationResult {
 }
 
 export class SpecValidator {
-  public validate(proposal: ChangeSetProposal): SpecValidationResult {
+  public validate(proposal: Proposal): SpecValidationResult {
     const violations: SpecViolation[] = [];
     const mutations = proposal.mutations || [];
 
@@ -50,7 +50,7 @@ export class SpecValidator {
     };
   }
 
-  private checkMutationRules(mutation: ChangeSetMutation, violations: SpecViolation[]): void {
+  private checkMutationRules(mutation: ProposalMutation, violations: SpecViolation[]): void {
     const attackId = mutation.attack_id || "unknown";
 
     // Rule SPEC-01: Damage cannot be negative or absurdly high

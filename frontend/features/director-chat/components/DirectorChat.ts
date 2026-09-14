@@ -17,7 +17,7 @@ export interface DirectorChatProps {
   initialMessages?: ChatMessage[];
   currentSnapshotHash?: string;
   selectedAttackIds?: string[];
-  activeChangesetId?: string;
+  activeProposalId?: string;
 }
 
 export class DirectorChatController {
@@ -52,7 +52,7 @@ export class DirectorChatController {
       processingState: "IDLE",
       activities: [],
       selectedAttackIds: props.selectedAttackIds ?? [],
-      activeChangesetId: props.activeChangesetId,
+      activeProposalId: props.activeProposalId,
     };
   }
 
@@ -72,8 +72,8 @@ export class DirectorChatController {
     this.state.selectedAttackIds = [...attackIds];
   }
 
-  public setActiveChangeset(changesetId?: string): void {
-    this.state.activeChangesetId = changesetId;
+  public setActiveProposal(proposalId?: string): void {
+    this.state.activeProposalId = proposalId;
   }
 
   public setSnapshotHash(hash: string): void {
@@ -86,7 +86,7 @@ export class DirectorChatController {
       conversation_id: this.conversationId,
       snapshot_hash: this.currentSnapshotHash,
       selected_attack_ids: [...this.state.selectedAttackIds],
-      active_changeset_id: this.state.activeChangesetId,
+      active_proposal_id: this.state.activeProposalId,
       user_prompt: userPrompt,
       timestamp: new Date().toISOString(),
       history: this.state.messages
@@ -111,7 +111,7 @@ export class DirectorChatController {
   public addAssistantResponse(
     content: string,
     toolCalls?: ToolCallPreview[],
-    proposedChangeset?: any,
+    proposedProposal?: any,
     activities?: PublicActivity[]
   ): ChatMessage {
     // Sanitize any forbidden execution phrases
@@ -125,7 +125,7 @@ export class DirectorChatController {
       status: "completed",
       toolCalls,
       activities,
-      proposedChangeset,
+      proposedProposal,
       timestamp: new Date().toISOString(),
     };
     this.state.messages.push(message);
@@ -154,7 +154,7 @@ export class DirectorChatController {
         {
           snapshot_hash: envelope.snapshot_hash,
           selected_attack_ids: envelope.selected_attack_ids,
-          active_changeset_id: envelope.active_changeset_id,
+          active_proposal_id: envelope.active_proposal_id,
         }
       );
 
@@ -162,7 +162,7 @@ export class DirectorChatController {
         this.state.activities = data.activities;
       }
 
-      this.addAssistantResponse(data.reply, data.tool_calls, data.proposed_changeset, data.activities);
+      this.addAssistantResponse(data.reply, data.tool_calls, data.proposed_proposal, data.activities);
       this.state.isWaitingForLlm = false;
       this.state.processingState = "COMPLETED";
       return data;
@@ -230,7 +230,7 @@ export class DirectorChatController {
         snapshotHash: this.currentSnapshotHash,
         selectedAttacksCount: this.state.selectedAttackIds.length,
         selectedAttackIds: [...this.state.selectedAttackIds],
-        activeChangesetId: this.state.activeChangesetId ?? null,
+        activeProposalId: this.state.activeProposalId ?? null,
       },
       error: this.state.error,
     };
@@ -268,14 +268,14 @@ export class DirectorChatController {
           })
           .join("\n");
 
-        const proposalId = m.proposedChangeset
-          ? (m.proposedChangeset.proposal_id || m.proposedChangeset.changeset_id || m.proposedChangeset.id || "")
+        const proposalId = m.proposedProposal
+          ? (m.proposedProposal.proposal_id || m.proposedProposal.proposal_id || m.proposedProposal.id || "")
           : "";
-        const proposalHtml = m.proposedChangeset
+        const proposalHtml = m.proposedProposal
           ? `
             <div class="proposal-card">
               <h4>Suggested Adjustment: <code>${proposalId}</code></h4>
-              <p>Target Revision: ${m.proposedChangeset.target_revision}</p>
+              <p>Target Revision: ${m.proposedProposal.target_revision}</p>
               <a class="btn btn-sm btn-outline" href="#/proposals/${proposalId}">Review Diff →</a>
             </div>`
           : "";

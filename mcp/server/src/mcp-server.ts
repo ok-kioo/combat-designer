@@ -46,7 +46,7 @@ export class CombatDesignerMcpServer {
           const principal: Principal = extra?.principal ?? {
             principal_id: "default_caller",
             principal_type: "human",
-            capabilities: ["combat:read", "combat:query", "combat:simulate", "combat:analyze", "combat:propose", "changeset:withdraw"],
+            capabilities: ["combat:read", "combat:query", "combat:simulate", "combat:analyze", "combat:propose", "proposal:withdraw"],
             authorized_workspaces: [args?.workspace_id || "default"],
           };
 

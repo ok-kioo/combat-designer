@@ -127,8 +127,8 @@ describe("11.T.2 — Function call combat_search", () => {
   });
 });
 
-// 11.T.3 — Chat with combat_propose_change creates changeset
-describe("11.T.3 — combat_propose_change creates changeset", () => {
+// 11.T.3 — Chat with combat_create_proposal creates proposal
+describe("11.T.3 — combat_create_proposal creates proposal", () => {
   let server: ApiServer;
 
   beforeAll(async () => {
@@ -139,7 +139,7 @@ describe("11.T.3 — combat_propose_change creates changeset", () => {
         return {
           text: null,
           function_calls: [{
-            name: "combat_propose_change",
+            name: "combat_create_proposal",
             args: {
               base_revision: "rev-1",
               target_revision: "rev-2",
@@ -149,7 +149,7 @@ describe("11.T.3 — combat_propose_change creates changeset", () => {
           finished: false,
         };
       }
-      return { text: "ChangeSet proposed successfully.", function_calls: [], finished: true };
+      return { text: "Proposal proposed successfully.", function_calls: [], finished: true };
     });
 
     server = new ApiServer({ port: TEST_PORT + 2, llmProvider: provider });
@@ -160,7 +160,7 @@ describe("11.T.3 — combat_propose_change creates changeset", () => {
     await server.close();
   });
 
-  it("creates changeset and includes it in response", async () => {
+  it("creates proposal and includes it in response", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT + 2}/api/workspaces/${WS_ID}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Authorized-Workspaces": "*" },
@@ -169,11 +169,11 @@ describe("11.T.3 — combat_propose_change creates changeset", () => {
     expect(res.status).toBe(200);
 
     const body = await res.json();
-    expect(body.proposed_changeset).toBeDefined();
-    expect(body.proposed_changeset.workspace_id).toBe(WS_ID);
-    expect(body.proposed_changeset.status).toBe("proposed");
-    expect(body.proposed_changeset.proposed_by).toBe("combat_director_llm");
-    expect(body.proposed_changeset.mutations).toHaveLength(1);
+    expect(body.proposed_proposal).toBeDefined();
+    expect(body.proposed_proposal.workspace_id).toBe(WS_ID);
+    expect(body.proposed_proposal.status).toBe("ACTIVE");
+    expect(body.proposed_proposal.proposed_by).toBe("combat_director_llm");
+    expect(body.proposed_proposal.mutations).toHaveLength(1);
   });
 });
 
@@ -241,8 +241,8 @@ describe("11.T.5 — Fallback to deterministic mock", () => {
     expect(res.status).toBe(200);
 
     const body = await res.json();
-    expect(body.reply).toContain("changeset proposal");
-    expect(body.proposed_changeset).toBeDefined();
+    expect(body.reply).toContain("suggested adjustment proposal");
+    expect(body.proposed_proposal).toBeDefined();
     expect(body.llm_orchestrated).toBeUndefined(); // Not set in mock path
   });
 
@@ -292,7 +292,7 @@ describe("11.T.6 — System prompt includes envelope context", () => {
     expect(capturedSystemPrompt).toContain(WS_ID);
     expect(capturedSystemPrompt).toContain("snap_xyz");
     expect(capturedSystemPrompt).toContain("atk_dragon_punch");
-    expect(capturedSystemPrompt).toContain("NEVER fabricate Gate verdicts");
+    expect(capturedSystemPrompt).toContain("NEVER fabricate diagnostic findings");
     expect(capturedSystemPrompt).toContain("NEVER approve");
   });
 });

@@ -141,12 +141,12 @@ A aplicação frontend organiza-se segundo a arquitetura de páginas e fluxo de 
 
 A validação de SPEC 10 exige:
 1. **Testes de Integração de Rotas HTTP do Backend (`10.T.1` a `10.T.10`)**:
-   - Cobertura de rotas de ataques, simulações, verificações, ciclo de vida de changesets, autenticação e chat.
+   - Cobertura de rotas de ataques, simulações, análises, propostas consultivas, autenticação e chat.
    - Verificação de barreira de workspace (`403 Forbidden` em chamadas cruzadas de tenant).
 2. **Testes de Unidade e Interação do Frontend (`10.UI.1` a `10.UI.8`)**:
    - `AttackCatalog`: listagem, filtragem e seleção para contexto do LLM.
    - `SimulationWorkbench`: execução de simulação, timeline e renderização de veredito de gate.
-   - `ChangeSetReview`: diff de mutações, ações de aprovação e aplicação com gate PASS.
+   - `ProposalReview`: diff de mutações, revisão consultiva e retirada de proposta; sem aprovação/aplicação runtime.
    - `DirectorChat`: construção do envelope de contexto e comunicação com endpoint de chat.
    - `CombatExplorer`: navegação entre abas preservando workspace ativo.
 3. **Testes de Autenticação e Sessão no Frontend (`10.UI.9` a `10.UI.14`)**:

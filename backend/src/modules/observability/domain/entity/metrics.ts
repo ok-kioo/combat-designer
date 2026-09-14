@@ -32,25 +32,10 @@ export const INGESTION_METRICS = {
   CONFLICTS_TOTAL: "ingestion_conflicts_total",
 } as const;
 
-export const GATE_METRICS = {
-  RUN_COUNT: "gate_run_count",
-  PASS_COUNT: "gate_pass_count",
-  FAIL_COUNT: "gate_fail_count",
-  BLOCKED_COUNT: "gate_blocked_count",
-  STALE_COUNT: "gate_stale_count",
-  BUDGET_EXCEEDED_COUNT: "gate_budget_exceeded_count",
-  ERROR_COUNT: "gate_error_count",
-  DURATION_MS: "gate_duration_ms",
-} as const;
-
-export const CHANGESET_METRICS = {
-  PROPOSED_COUNT: "changeset_proposed_count",
-  SIMULATED_COUNT: "changeset_simulated_count",
-  VERIFIED_COUNT: "changeset_verified_count",
-  APPROVED_COUNT: "changeset_approved_count",
-  APPLIED_COUNT: "changeset_applied_count",
-  WITHDRAWN_COUNT: "changeset_withdrawn_count",
-  REJECTED_COUNT: "changeset_rejected_count",
+export const PROPOSAL_METRICS = {
+  CREATED_COUNT: "proposal_created_count",
+  WITHDRAWN_COUNT: "proposal_withdrawn_count",
+  ARCHIVED_COUNT: "proposal_archived_count",
 } as const;
 
 /**
@@ -63,9 +48,8 @@ export const FORBIDDEN_METRIC_LABELS = new Set([
   "request_id",
   "correlation_id",
   "attack_id",
-  "changeset_id",
+  "proposal_id",
   "simulation_id",
-  "gate_run_id",
   "event_id",
 ]);
 

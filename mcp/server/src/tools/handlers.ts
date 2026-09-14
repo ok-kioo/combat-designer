@@ -140,9 +140,9 @@ export function createToolHandlers(adapter: ApplicationAdapter) {
       };
     },
 
-    combat_propose_change: async (ctx: AuthorizedToolCallContext) => {
+    combat_create_proposal: async (ctx: AuthorizedToolCallContext) => {
       const p = ctx.validated_params as any;
-      const proposal = await adapter.proposeChangeset(
+      const proposal = await adapter.createProposal(
         ctx.workspace_id,
         p.base_revision,
         p.target_revision,
@@ -157,11 +157,11 @@ export function createToolHandlers(adapter: ApplicationAdapter) {
       };
     },
 
-    combat_get_change: async (ctx: AuthorizedToolCallContext) => {
-      const p = ctx.validated_params as { workspace_id: string; changeset_id: string };
-      const proposal = await adapter.getChangeset(ctx.workspace_id, p.changeset_id);
+    combat_get_proposal: async (ctx: AuthorizedToolCallContext) => {
+      const p = ctx.validated_params as { workspace_id: string; proposal_id: string };
+      const proposal = await adapter.getProposal(ctx.workspace_id, p.proposal_id);
       if (!proposal) {
-        throw new McpError("RESOURCE_NOT_FOUND", `ChangeSet '${p.changeset_id}' not found in workspace '${ctx.workspace_id}'.`);
+        throw new McpError("RESOURCE_NOT_FOUND", `Proposal '${p.proposal_id}' not found in workspace '${ctx.workspace_id}'.`);
       }
       return {
         classification: "FACT",
@@ -170,9 +170,9 @@ export function createToolHandlers(adapter: ApplicationAdapter) {
       };
     },
 
-    combat_withdraw_change: async (ctx: AuthorizedToolCallContext) => {
-      const p = ctx.validated_params as { workspace_id: string; changeset_id: string; reason: string };
-      const withdrawn = await adapter.withdrawChangeset(ctx.workspace_id, p.changeset_id, p.reason);
+    combat_withdraw_proposal: async (ctx: AuthorizedToolCallContext) => {
+      const p = ctx.validated_params as { workspace_id: string; proposal_id: string; reason: string };
+      const withdrawn = await adapter.withdrawProposal(ctx.workspace_id, p.proposal_id, p.reason);
       return {
         classification: "SUGGESTION",
         workspace_id: ctx.workspace_id,

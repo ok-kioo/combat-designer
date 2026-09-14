@@ -116,7 +116,7 @@ export class NativeTracer {
         if (correlation.use_case) otelSpan.setAttribute("use_case", correlation.use_case);
         if (correlation.simulation_id) otelSpan.setAttribute("simulation.id", correlation.simulation_id);
         if (correlation.gate_run_id) otelSpan.setAttribute("gate_run.id", correlation.gate_run_id);
-        if (correlation.changeset_id) otelSpan.setAttribute("changeset.id", correlation.changeset_id);
+        if (correlation.proposal_id) otelSpan.setAttribute("proposal.id", correlation.proposal_id);
       }
 
       return new OtelSpanWrapper(otelSpan);
